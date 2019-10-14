@@ -10,4 +10,4 @@
 #include <stdlib.h>
 
 
-std::vector<uint8_t> read_file(std::string filename);
+void read_file(std::string filename, std::vector<uint8_t> &buf);

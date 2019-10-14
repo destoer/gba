@@ -3,12 +3,11 @@
 // init all sup compenents
 GBA::GBA(std::string filename)
 {
-    mem.init(filename,&debug);
+    mem.init(filename,&debug,&cpu);
     disass.init(&mem,&cpu);
     disp.init(&mem);
     cpu.init(&disp,&mem,&debug);
     debug.init(&mem,&cpu,&disp,&disass);
-
 }
 
 // start the main emulation loop

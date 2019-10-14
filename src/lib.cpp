@@ -2,7 +2,7 @@
 #include <fstream>
 
 
-std::vector<uint8_t> read_file(std::string filename)
+void read_file(std::string filename, std::vector<uint8_t> &buf)
 {
     std::ifstream fp(filename,std::ios::binary);
 
@@ -12,21 +12,17 @@ std::vector<uint8_t> read_file(std::string filename)
         exit(1);
     }
 
-    // get file size
-    size_t size;
+
 
     fp.seekg(0,std::ios::end);
-    size = fp.tellg();
+    size_t size = fp.tellg();
     fp.seekg(0,std::ios::beg);
 
     fp.clear();
 
-    std::vector<uint8_t> v(size);
+    buf.resize(size);
 
-    fp.read((char*)v.data(),size);
-
-
-    return v;
+    fp.read((char*)buf.data(),size);
 
 }
 

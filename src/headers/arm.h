@@ -22,3 +22,5 @@ constexpr int R12 = 12;
 constexpr int SP = 13; // stack pointer
 constexpr int LR = 14; // return address (link register)
 constexpr int PC = 15; // program counter
+
+constexpr int ARM_WORD_SIZE = 4; 
