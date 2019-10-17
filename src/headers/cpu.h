@@ -17,6 +17,8 @@ private:
 
     uint32_t fetch_arm_opcode();
 
+    void arm_fill_pipeline();
+
     Display *disp;
     Mem *mem;
     Debugger *debug;

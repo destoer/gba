@@ -13,5 +13,5 @@ GBA::GBA(std::string filename)
 // start the main emulation loop
 void GBA::run()
 {
-
+    cpu.step();
 }

@@ -9,11 +9,16 @@ void Cpu::init(Display *disp, Mem *mem, Debugger *debug)
 
 
     // setup main cpu state
-    cpu_mode = USER; // user mode
+    cpu_mode = SYSTEM; // system mode
     is_thumb = false;  // cpu in arm mode
-    regs[PC] = 0x8000000; // cartrige reset vector
+    regs[PC] = 0x08000000; // cartrige reset vector
+    arm_fill_pipeline(); // fill the intitial cpu pipeline
 }
 
+void Cpu::cycle_tick(int cycles)
+{
+    (void)cycles;
+}
 
 // get this booting into armwrestler
 // by skipping the state forward

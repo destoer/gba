@@ -1,7 +1,10 @@
 #pragma once
 #include "forward_def.h"
 #include "lib.h"
+#include "arm.h"
 
+// not really happy with the impl 
+// so think of a better way to model it
 class Mem
 {
 public:
@@ -9,32 +12,42 @@ public:
 
 
     // read mem unticked
-    uint8_t read_byte(uint32_t addr);
-    uint16_t read_half(uint32_t addr);
-    uint32_t read_word(uint32_t addr);
-
-    // write mem unticked
-    void write_byte(uint32_t addr,uint8_t v);
-    void write_half(uint32_t addr,uint16_t v);
-    void write_word(uint32_t addr,uint32_t v);
-
-    // read mem ticked
-    uint8_t read_bytet(uint32_t addr);
-    uint16_t read_halft(uint32_t addr);
-    uint32_t read_wordt(uint32_t addr);
-
-    // write mem ticked
-    void write_bytet(uint32_t addr,uint8_t v);
-    void write_halft(uint32_t addr,uint16_t v);
-    void write_wordt(uint32_t addr,uint32_t v);
+    uint32_t read_mem(uint32_t addr,Access_type mode);
 
 
 private:
     Debugger *debug;
     Cpu *cpu;
     
-    // how many cpu cylces the last access took
-    int mem_cycles; 
+
+    void tick_mem_access(int mode);
+    inline uint32_t handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mode);
+
+
+    uint32_t read_bios(uint32_t addr,Access_type type);
+    uint32_t read_board_wram(uint32_t addr,Access_type type);
+    uint32_t read_chip_wram(uint32_t addr,Access_type type);
+    uint32_t read_io(uint32_t addr,Access_type type);
+    uint32_t read_obj_ram(uint32_t addr,Access_type type);
+    uint32_t read_vram(uint32_t addr,Access_type type);
+    uint32_t read_oam(uint32_t addr,Access_type type);
+    uint32_t read_external(uint32_t addr,Access_type type);
+
+
+
+    // last accessed memory region
+    enum Memory_region
+    {
+        BIOS = 0,WRAM_BOARD,WRAM_CHIP,
+        IO,BG,VRAM,OAM,ROM,FLASH,SRAM,
+        UNDEFINED
+    };
+
+    // memory cycle timings
+    // some can be set dynamically
+    int wait_states[10][3];
+
+    Memory_region mem_region;
 
     // general memory
     // bios code

@@ -8,6 +8,8 @@ public:
 
     void init(Mem *mem, Cpu *cpu, Display *display, Disass *disass);
 
+    void enter_debugger();
+
     /*
         enter_debugger
         step
@@ -17,12 +19,6 @@ public:
         disass
         assemble 
     */
-
-private:
-    Mem *mem;
-    Cpu *cpu;
-    Display *disp;
-    Disass *disass;
 
     // struct for hold program breakpoints
     struct Breakpoint
@@ -43,8 +39,24 @@ private:
         uint32_t addr;
     };
 
+
     // rwx breakpoints
     Breakpoint breakpoint_r;
     Breakpoint breakpoint_w;
     Breakpoint breakpoint_x;
+
+private:
+    Mem *mem;
+    Cpu *cpu;
+    Display *disp;
+    Disass *disass;
+
+    bool debug_quit = false;
+
+
+    void run(std::vector<std::string> command);
+    void breakpoint(std::vector<std::string> command);
 };
+
+
+using DEBUGGER_FPTR = void (Debugger::*)(std::vector<std::string>);

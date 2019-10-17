@@ -1,10 +1,16 @@
 #pragma once
+
+// user and system share the same registers
 enum Cpu_mode 
 {
     FIQ = 0,SUPERVISOR,ABORT,
-    IRQ, UNDEFINED, USER
+    IRQ, UNDEFINED, USER, SYSTEM
 };
 
+enum Access_type
+{
+    BYTE = 0,HALF,WORD
+};
 
 constexpr int R0 = 0;
 constexpr int R1 = 1;
