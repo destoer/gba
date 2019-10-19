@@ -9,12 +9,21 @@ public:
     void init(Mem *mem, Cpu *cpu, Display *display, Disass *disass);
 
     void enter_debugger();
+    void disable_breakpoints()
+    {
+        breakpoint_r.disable();
+        breakpoint_w.disable();
+        breakpoint_x.disable();
+    }
+
+    void enable_breakpoints()
+    {
+        breakpoint_r.enable();
+        breakpoint_w.enable();
+        breakpoint_x.enable();
+    }
 
     /*
-        enter_debugger
-        step
-        break
-        print
         write
         disass
         assemble 
@@ -33,6 +42,39 @@ public:
             this->break_enabled = break_enabled;
         }
 
+        void disable()
+        {
+            break_enabled = false;
+        }
+
+        void enable()
+        {
+            break_enabled = true;
+        }
+
+        bool is_hit(uint32_t addr, uint32_t value)
+        {
+            if(!break_enabled)
+            {
+                return false;
+            }
+
+            // value enabled and its not equal
+            if(value_enabled && value != this->value)
+            {
+                return false;
+            }
+
+            // not breakpointed on this addr
+            if(addr != this->addr)
+            {
+                return false;
+            }
+
+            // must be true
+            return true;
+        }
+
         uint32_t value;
         bool value_enabled;
         bool break_enabled;
@@ -45,6 +87,9 @@ public:
     Breakpoint breakpoint_w;
     Breakpoint breakpoint_x;
 
+
+    bool step_instr = false;
+
 private:
     Mem *mem;
     Cpu *cpu;
@@ -56,6 +101,9 @@ private:
 
     void run(std::vector<std::string> command);
     void breakpoint(std::vector<std::string> command);
+    void clear(std::vector<std::string> command);
+    void step(std::vector<std::string> command);
+    void info(std::vector<std::string> command);
 };
 
 

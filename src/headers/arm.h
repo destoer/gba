@@ -30,3 +30,23 @@ constexpr int LR = 14; // return address (link register)
 constexpr int PC = 15; // program counter
 
 constexpr int ARM_WORD_SIZE = 4; 
+
+
+// register names
+extern const char *user_regs_names[16];
+
+extern const char *fiq_banked_names[6];
+
+extern const char *hi_banked_names[5][2];
+
+extern const char *status_banked_names[5];
+
+
+// instr decoding
+constexpr int LINK_BIT =  20;
+
+
+inline uint32_t get_arm_opcode_bits(uint32_t instr)
+{
+    return ((instr >> 4) & 0xf) | ((instr >> 16) & 0xff0);    
+}

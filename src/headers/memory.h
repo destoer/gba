@@ -13,7 +13,7 @@ public:
 
     // read mem unticked
     uint32_t read_mem(uint32_t addr,Access_type mode);
-
+    uint32_t read_memt(uint32_t addr,Access_type mode);
 
 private:
     Debugger *debug;

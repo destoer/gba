@@ -121,6 +121,8 @@ inline uint32_t Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_
 // this will require special handling
 uint32_t Mem::read_io(uint32_t addr,Access_type mode)
 {
+    puts("IO READ!");
+    exit(1);
     mem_region = IO;
     //return io[addr & 0x3ff];
     return handle_read(io,addr&0x3ff,mode);
