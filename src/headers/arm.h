@@ -1,4 +1,5 @@
 #pragma once
+#include "lib.h"
 
 // user and system share the same registers
 enum Cpu_mode 
@@ -43,10 +44,39 @@ extern const char *status_banked_names[5];
 
 
 // instr decoding
-constexpr int LINK_BIT =  20;
+constexpr int L_BIT =  20;
+
+
+
+
+
+// flags
+constexpr int N_BIT = 31; // negative
+constexpr int Z_BIT = 30; // zero
+constexpr int C_BIT = 29; // carry
+constexpr int V_BIT = 28; // overflow
+
+
+enum Arm_cond
+{
+    EQ=0,NE=1,CS=2,CC=3,MI=4,PL=5,VS=6,
+    VC=7,HI=8,LS=9,GE=10,LT=11,GT=12,LE=13,AL=14
+};
+
 
 
 inline uint32_t get_arm_opcode_bits(uint32_t instr)
 {
     return ((instr >> 4) & 0xf) | ((instr >> 16) & 0xff0);    
+}
+
+// operand two immediate is produced
+// with a 8 bit imm rotated right
+// by a shift value * 2
+inline uint32_t get_arm_operand2_imm(uint32_t opcode)
+{
+    int imm = opcode & 0xff;
+    const int shift = (opcode >> 8) & 0xf;
+    imm = rotr(imm,shift*2);
+    return imm;    
 }

@@ -23,6 +23,21 @@ public:
         breakpoint_x.enable();
     }
 
+    void save_breakpoints()
+    {
+        bk_breakpoint_r = breakpoint_r;
+        bk_breakpoint_w = breakpoint_w;
+        bk_breakpoint_x = breakpoint_x;
+    }
+
+
+    void restore_breakpoints()
+    {
+        breakpoint_r = bk_breakpoint_r;
+        breakpoint_w = bk_breakpoint_w;
+        breakpoint_x = bk_breakpoint_x;
+    }
+
     /*
         write
         disass
@@ -99,11 +114,22 @@ private:
     bool debug_quit = false;
 
 
+    // breakpoint backups
+    Breakpoint bk_breakpoint_r;
+    Breakpoint bk_breakpoint_w;
+    Breakpoint bk_breakpoint_x;    
+
+
+    void set_break_type(std::string command,uint32_t value,uint32_t addr, bool value_enabled);
+
     void run(std::vector<std::string> command);
     void breakpoint(std::vector<std::string> command);
     void clear(std::vector<std::string> command);
     void step(std::vector<std::string> command);
     void info(std::vector<std::string> command);
+    void disass_addr(std::vector<std::string> command);
+    void exec(std::vector<std::string> command);
+    void write(std::vector<std::string> command);
 };
 
 

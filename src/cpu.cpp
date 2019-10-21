@@ -26,11 +26,31 @@ void Cpu::init_opcode_table()
 
     for(int i = 0; i < 4096; i++)
     {
-        // bit pattern 101
-        // at bit 27 is branch
+        // 101 << 9 (branch)
         if((i & 0xa00) == 0xa00)
         {
             opcode_table[i] = instr_branch;
+        }
+
+        // arm data processing 00 at bit 27
+        // more specific ones need to preceed this
+        else if((i & 0x200) == 0x200)
+        {
+             // now we have to switch on its "opcode field"
+            switch((i >> 5) & 0xf)
+            {
+                case 0xd: // mov
+                {
+                    opcode_table[i] = instr_mov;
+                    break;
+                }
+
+                default:
+                {
+                    opcode_table[i] = instr_unknown;
+                    break;
+                }
+            }
         }
 
 
@@ -118,6 +138,34 @@ void Cpu::print_regs()
     printf("\ncpsr: %08x\n",cpsr);
 }
 
+
+// set zero flag based on arg
+void Cpu::set_zero_flag(uint32_t v)
+{
+    if(!v) // if zero set the flag else deset
+    {
+        cpsr = set_bit(cpsr,Z_BIT);
+    }
+
+    else 
+    {
+        cpsr = deset_bit(cpsr,Z_BIT);
+    }    
+}
+
+
+void Cpu::set_negative_flag(uint32_t v)
+{
+    if(is_set(v,31)) // is negative when signed
+    {
+        cpsr = set_bit(cpsr,N_BIT);
+    }
+
+    else
+    {
+        cpsr = deset_bit(cpsr,N_BIT);
+    }    
+}
 
 // store current active registers back into the copies
 void Cpu::store_registers(Cpu_mode mode)
