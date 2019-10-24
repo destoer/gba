@@ -2,7 +2,7 @@
 #include "headers/arm.h"
 #include "headers/memory.h"
 #include "headers/cpu.h"
-#include "headers/arm_disass.h"
+#include "headers/disass.h"
 #include <sstream>
 #include <exception>
 
@@ -104,7 +104,7 @@ void Debugger::breakpoint(std::vector<std::string> command)
     bool value_enabled = false;
     uint32_t value = 0xdeadbeef;
     // value or type break
-    if(size <= 3)
+    if(size == 3)
     {
         // type 
         if(!isdigit(command[2][0])) 
@@ -131,7 +131,7 @@ void Debugger::breakpoint(std::vector<std::string> command)
     }
 
     // set a rwx
-    else if(size >= 4)
+    else if(size == 4)
     {
         set_break_type(command[3],value,addr,value_enabled);
     }
@@ -303,14 +303,35 @@ void Debugger::disass_addr(std::vector<std::string> command)
             for(int i = 0; i < value; i++)
             {
                 uint32_t address = addr+(i*ARM_WORD_SIZE);
-                std::string s = disass->disass_arm(mem->read_mem(address,WORD),address+ARM_WORD_SIZE);
+                std::string s;
+                if(!cpu->is_cpu_thumb())
+                {
+                    s = disass->disass_arm(mem->read_mem(address,WORD),address+ARM_WORD_SIZE);
+                }
+
+                else
+                {
+                    disass->disass_thumb(mem->read_mem(address,HALF),address+ARM_HALF_SIZE);
+                }
+
                 std::cout << fmt::format("{:08x}: {}\n",address,s);
             }
         }
         
         else 
         {
-            std::cout << disass->disass_arm(mem->read_mem(addr,WORD),addr+ARM_WORD_SIZE) << "\n";
+            std::string s;
+            if(!cpu->is_cpu_thumb())
+            {
+                s = disass->disass_arm(mem->read_mem(addr,WORD),addr+ARM_WORD_SIZE);
+            }
+
+            else
+            {
+                disass->disass_thumb(mem->read_mem(addr,HALF),addr+ARM_HALF_SIZE);
+            }
+
+            std::cout << fmt::format("{:08x}: {}\n",addr,s);
         }
         restore_breakpoints();
     }

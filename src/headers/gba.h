@@ -1,7 +1,7 @@
 #pragma once
 #include "cpu.h"
 #include "memory.h"
-#include "arm_disass.h"
+#include "disass.h"
 #include "display.h"
 #include "debugger.h"
 

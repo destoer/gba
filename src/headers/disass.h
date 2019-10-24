@@ -1,0 +1,57 @@
+#pragma once
+
+#include "forward_def.h"
+#include "lib.h"
+
+class Disass
+{
+public:
+    void init(Mem *mem, Cpu *cpu)
+    {
+        this->mem = mem;
+        this->cpu = cpu;
+        init_arm_disass_table();
+        init_thumb_disass_table();
+    }
+
+    std::string disass_arm(uint32_t opcode,uint32_t pc);
+    std::string disass_thumb(uint16_t opcode,uint32_t pc);
+
+
+private:
+    Mem *mem;
+    Cpu *cpu;
+    uint32_t pc; // pc for disassmebling instrs
+
+    const char *shift_names[4] = 
+    {
+        "lsl",
+        "lsr",
+        "asr",
+        "ror"
+    };
+
+
+    using ARM_DISASS_FPTR = std::string (Disass::*)(uint32_t opcode);
+    using THUMB_DISASS_FPTR = std::string (Disass::*)(uint16_t opcode);
+    std::vector<ARM_DISASS_FPTR> disass_arm_table;
+    std::vector<THUMB_DISASS_FPTR> disass_thumb_table;
+    void init_arm_disass_table();
+    void init_thumb_disass_table();
+
+    // arm disassembling
+    std::string disass_arm_get_cond_suffix(int opcode);
+    std::string disass_arm_branch(uint32_t opcode);
+    std::string disass_arm_data_processing(uint32_t opcode);
+    std::string disass_arm_unknown(uint32_t opcode);
+    std::string disass_arm_single_data_transfer(uint32_t opcode);
+    std::string disass_arm_get_shift_string(uint32_t opcode);
+    std::string disass_arm_branch_and_exchange(uint32_t opcode);
+    std::string disass_arm_psr(uint32_t opcode);
+
+
+    // thumb disassembling
+    std::string disass_thumb_ldr_pc(uint16_t opcode);
+    std::string disass_thumb_mov_reg_shift(uint16_t opcode);
+    std::string disass_thumb_unknown(uint16_t opcode);
+};

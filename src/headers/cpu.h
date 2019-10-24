@@ -13,6 +13,12 @@ public:
 
     uint32_t get_pc() const {return regs[PC];}
     void set_pc(uint32_t pc) {regs[PC] = pc;}
+
+
+    uint32_t get_mode() const { return cpu_mode; }
+
+    bool is_cpu_thumb() const { return is_thumb; }
+
     // print all registers for debugging
     // if we go with a graphical debugger
     // we need to make ones for each array
@@ -20,39 +26,58 @@ public:
     void print_regs();
     
     void execute_arm_opcode(uint32_t instr);
-
+    void execute_thumb_opcode(uint16_t instr);
 private:
 
     using ARM_OPCODE_FPTR = void (Cpu::*)(uint32_t opcode);
-    std::vector<ARM_OPCODE_FPTR> opcode_table;
+    using THUMB_OPCODE_FPTR = void (Cpu::*)(uint16_t opcode);
+    std::vector<ARM_OPCODE_FPTR> arm_opcode_table;
+    std::vector<THUMB_OPCODE_FPTR> thumb_opcode_table;
     void init_opcode_table();
-
+    void init_arm_opcode_table();
+    void init_thumb_opcode_table();
+    
 
     void exec_thumb();
     void exec_arm();
 
     uint32_t fetch_arm_opcode();
+    uint16_t fetch_thumb_opcode();
 
     void arm_fill_pipeline();
 
     bool cond_met(uint32_t opcode);
 
-    //cpu instructions
-    void instr_unknown(uint32_t opcode);
-    void instr_branch(uint32_t opcode);
-    void instr_mov(uint32_t opcode);
-    void instr_ldr(uint32_t opcode);
-    void instr_str(uint32_t opcode);
+    //arm cpu instructions
+    void arm_unknown(uint32_t opcode);
+    void arm_branch(uint32_t opcode);
+    void arm_data_processing(uint32_t opcode);
+    void arm_psr(uint32_t opcode);
+    void arm_single_data_transfer(uint32_t opcode);
+    void arm_branch_and_exchange(uint32_t opcode);
+
+
+    // thumb cpu instructions
+    void thumb_unknown(uint16_t opcode);
+    void thumb_ldr_pc(uint16_t opcode);
+    void thumb_mov_reg_shift(uint16_t opcode);
+
+    // cpu operations eg adds
+    uint32_t add(uint32_t v1, uint32_t v2, bool s);
+    
 
 
 
+
+    // mode switching
+    void switch_mode(Cpu_mode new_mode);
     void store_registers(Cpu_mode mode);
     void load_registers(Cpu_mode mode);
 
     //flag helpers
     void set_negative_flag(uint32_t v);
     void set_zero_flag(uint32_t v);
-
+    void set_nz_flag(uint32_t v);
 
 
     Display *disp;
@@ -90,4 +115,3 @@ private:
     // cpu pipeline
     uint32_t pipeline[2] = {0};
 };
-

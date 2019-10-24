@@ -26,3 +26,9 @@ const char *status_banked_names[5] =
     "spsr_fiq","spsr_svc","spsr_abt",
     "spsr_irq","spsr_und",
 };
+
+const char *mode_names[7] =
+{
+    "FIQ","SUPERVISOR","ABORT",
+    "IRQ", "UNDEFINED", "USER", "SYSTEM"
+};
