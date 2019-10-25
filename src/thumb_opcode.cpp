@@ -45,6 +45,32 @@ void Cpu::execute_thumb_opcode(uint16_t instr)
     std::invoke(thumb_opcode_table[op],this,instr);    
 }
 
+void Cpu::thumb_long_bl(uint16_t opcode)
+{
+    uint16_t opcode2 = mem->read_mem(regs[PC],HALF);
+    regs[PC] += ARM_HALF_SIZE;
+
+
+    // 11 bit addrs each
+    // total is 23 bit with bit 0 ignored
+    opcode2 &= 0b11111111111;
+    opcode &= 0b11111111111;
+
+    bool is_high = is_set(opcode2,11);
+
+    // 2nd instr pc is + 4 ahead
+    uint32_t addr = is_high? (opcode2) << 12 : (opcode2) << 1;
+    addr |= is_high? opcode << 12 : opcode << 1; 
+
+
+    regs[LR] = regs[PC]; // not sure if this sets lr properly
+
+    regs[PC] = addr = (addr + regs[PC]) & ~1;
+
+    //3S+1N cycles total
+    cycle_tick(4); 
+
+}
 
 void Cpu::thumb_mov_reg_shift(uint16_t opcode)
 {
@@ -61,18 +87,66 @@ void Cpu::thumb_mov_reg_shift(uint16_t opcode)
 
     set_nz_flag(regs[rd]);
 
-    if(did_carry)
+
+    cpsr = did_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
+
+
+    // 1 s cycle
+    cycle_tick(1);
+}
+
+void Cpu::thumb_mcas_imm(uint16_t opcode)
+{
+    int op = (opcode >> 11) & 0x3;
+
+    int rd = (opcode >> 8) & 0x7;
+
+    uint8_t imm = opcode & 0xff;
+
+
+    switch(op)
     {
-        set_bit(cpsr,C_BIT);
+        case 0x00: // mov
+        {
+            set_nz_flag(imm);
+            regs[rd] = imm;
+            break;
+        }
+
+        default:
+        {
+            puts("unknown mcas imm");
+            thumb_unknown(opcode);
+            break;
+        }
     }
 
-    else
+    // 1 s cycle
+    cycle_tick(1);
+}
+
+
+void Cpu::thumb_cond_branch(uint16_t opcode)
+{
+    int8_t offset = opcode & 0xff;
+    uint32_t addr = (regs[PC]+2) + offset*2;
+    int cond = (opcode >> 8) & 0xf;
+
+
+    // if branch taken 2s +1n cycles
+    if(cond_met(cond))
     {
-        deset_bit(cpsr,C_BIT);
+        regs[PC] = addr;
+        cycle_tick(3);
+    }
+
+    // else 1s
+    else 
+    {
+        cycle_tick(1);
     }
 
 }
-
 
 void Cpu::thumb_ldr_pc(uint16_t opcode)
 {

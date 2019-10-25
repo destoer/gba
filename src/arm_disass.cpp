@@ -100,27 +100,6 @@ std::string Disass::disass_arm_get_cond_suffix(int opcode)
 {
 
     const int cond_bits = (opcode >> 28) & 0xf;
-    const static std::string suf_array[16] =
-    {
-        "eq",
-        "ne",
-        "cs",
-        "cc",
-        "mi",
-        "pl",
-        "vs",
-        "vc",
-        "hi",
-        "ls",
-        "ge",
-        "lt",
-        "gt",
-        "le",
-        "", // AL
-        "" // undefined
-    };
-
-
     return std::string(suf_array[cond_bits]);
 }
 

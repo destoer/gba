@@ -46,7 +46,7 @@ private:
 
     void arm_fill_pipeline();
 
-    bool cond_met(uint32_t opcode);
+    bool cond_met(int opcode);
 
     //arm cpu instructions
     void arm_unknown(uint32_t opcode);
@@ -61,6 +61,9 @@ private:
     void thumb_unknown(uint16_t opcode);
     void thumb_ldr_pc(uint16_t opcode);
     void thumb_mov_reg_shift(uint16_t opcode);
+    void thumb_cond_branch(uint16_t opcode);
+    void thumb_mcas_imm(uint16_t opcode);
+    void thumb_long_bl(uint16_t opcode);
 
     // cpu operations eg adds
     uint32_t add(uint32_t v1, uint32_t v2, bool s);

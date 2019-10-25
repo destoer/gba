@@ -297,12 +297,14 @@ void Debugger::disass_addr(std::vector<std::string> command)
     {
         uint32_t addr = std::stoll(command[1],nullptr,16);
 
+        disass->set_pc(addr);
+
         if(command.size() == 3)
         {
             int value = std::stoi(command[2],nullptr,16);
             for(int i = 0; i < value; i++)
             {
-                uint32_t address = addr+(i*ARM_WORD_SIZE);
+                uint32_t address = disass->get_pc();
                 std::string s;
                 if(!cpu->is_cpu_thumb())
                 {
@@ -311,7 +313,7 @@ void Debugger::disass_addr(std::vector<std::string> command)
 
                 else
                 {
-                    disass->disass_thumb(mem->read_mem(address,HALF),address+ARM_HALF_SIZE);
+                    s = disass->disass_thumb(mem->read_mem(address,HALF),address+ARM_HALF_SIZE);
                 }
 
                 std::cout << fmt::format("{:08x}: {}\n",address,s);
@@ -328,7 +330,7 @@ void Debugger::disass_addr(std::vector<std::string> command)
 
             else
             {
-                disass->disass_thumb(mem->read_mem(addr,HALF),addr+ARM_HALF_SIZE);
+                s = disass->disass_thumb(mem->read_mem(addr,HALF),addr+ARM_HALF_SIZE);
             }
 
             std::cout << fmt::format("{:08x}: {}\n",addr,s);

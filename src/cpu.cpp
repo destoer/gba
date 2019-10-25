@@ -31,15 +31,37 @@ void Cpu::init_thumb_opcode_table()
 
     for(int i = 0; i < 256; i++)
     {
+
+        // THUMB.19: long branch with link
+        if((i >> 4) == 0xf)
+        {
+            thumb_opcode_table[i] = thumb_long_bl;
+        }
+
         // THUMB.6: load PC-relative
-        if(((i >> 3) & 0b01001) ==  0b01001)
+        else if(((i >> 3) & 0b01001) ==  0b01001)
         {
             thumb_opcode_table[i] = thumb_ldr_pc;
         }
 
+        // THUMB.3: move/compare/add/subtract immediate
+        else if(((i >> 5) & 0b001) == 0b001)
+        {
+            thumb_opcode_table[i] = thumb_mcas_imm;
+        }
+
+
+        // THUMB.1: move shifted register
         else if(((i >> 5) & 0x7) == 0)
         {
             thumb_opcode_table[i] = thumb_mov_reg_shift;
+        }
+
+
+        // THUMB.16: conditional branch
+        else if((i >> 4) == 0b1101)
+        {
+            thumb_opcode_table[i] = thumb_cond_branch;
         }
 
         else 
@@ -374,6 +396,68 @@ void Cpu::store_registers(Cpu_mode mode)
         }
     }
 }
+
+
+
+
+// tests if a cond field in an instr has been met
+bool Cpu::cond_met(int opcode)
+{
+    // switch on the cond bits
+    // (lower 4)
+    switch(opcode & 0xf)
+    {
+        // z set
+        case EQ: return is_set(cpsr,Z_BIT);
+        
+        // z clear
+        case NE: return !is_set(cpsr,Z_BIT);
+
+        // c set
+        case CS: return is_set(cpsr,C_BIT);
+
+        // c clear
+
+        case CC: return !is_set(cpsr,C_BIT);
+
+        // n set
+        case MI: return is_set(cpsr,N_BIT);
+
+        // n clear
+        case PL: return !is_set(cpsr,N_BIT);
+
+        // v set
+        case VS: return is_set(cpsr,V_BIT);
+
+        // v clear
+        case VC: return !is_set(cpsr,V_BIT);
+
+        // c set and z clear
+        case HI: return is_set(cpsr, C_BIT) && !is_set(cpsr,Z_BIT);
+
+        // c clear or z set
+        case LS: return !is_set(cpsr,C_BIT) || is_set(cpsr,Z_BIT);
+
+        // n equals v
+        case GE: return is_set(cpsr,N_BIT) == is_set(cpsr,V_BIT);
+
+        // n not equal to v
+        case LT: return is_set(cpsr,N_BIT) != is_set(cpsr,V_BIT);
+
+        // z clear and N equals v
+        case GT: return !is_set(cpsr,Z_BIT) && is_set(cpsr,N_BIT) == is_set(cpsr,V_BIT);
+
+        // z set or n not equal to v
+        case LE: return is_set(cpsr,Z_BIT) || is_set(cpsr,N_BIT) != is_set(cpsr,V_BIT);
+
+        // allways
+        case AL: return true;
+
+    }
+    printf("cond_met fell through %08x!?\n",opcode);
+    exit(1);
+}
+
 
 
 // common arithmetic and logical operations

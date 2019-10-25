@@ -14,6 +14,9 @@ public:
         init_thumb_disass_table();
     }
 
+    uint32_t get_pc() const { return pc; }
+    void set_pc(uint32_t pc) { this->pc = pc;}
+
     std::string disass_arm(uint32_t opcode,uint32_t pc);
     std::string disass_thumb(uint16_t opcode,uint32_t pc);
 
@@ -31,6 +34,26 @@ private:
         "ror"
     };
 
+
+    const char *suf_array[16] =
+    {
+        "eq",
+        "ne",
+        "cs",
+        "cc",
+        "mi",
+        "pl",
+        "vs",
+        "vc",
+        "hi",
+        "ls",
+        "ge",
+        "lt",
+        "gt",
+        "le",
+        "", // AL
+        "" // undefined
+    };
 
     using ARM_DISASS_FPTR = std::string (Disass::*)(uint32_t opcode);
     using THUMB_DISASS_FPTR = std::string (Disass::*)(uint16_t opcode);
@@ -54,4 +77,8 @@ private:
     std::string disass_thumb_ldr_pc(uint16_t opcode);
     std::string disass_thumb_mov_reg_shift(uint16_t opcode);
     std::string disass_thumb_unknown(uint16_t opcode);
+    std::string disass_thumb_cond_branch(uint16_t opcode);
+    std::string disass_thumb_mcas_imm(uint16_t opcode);
+    std::string disass_thumb_long_bl(uint16_t opcode);
+    std::string disass_thumb_alu(uint16_t opcode);
 };
