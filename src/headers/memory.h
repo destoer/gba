@@ -71,7 +71,7 @@ private:
     std::vector<uint8_t> board_wram; // 0x40000
 
     // on chip wram
-    std::vector<uint8_t> chip_wram; // 8000
+    std::vector<uint8_t> chip_wram; // 0x8000
 
     // io regs
     std::vector<uint8_t> io; // 0x400
@@ -108,4 +108,15 @@ private:
 
 
 // memory constants
+constexpr int IO_MASK = 0x3ff;
+
+
 constexpr int IO_IME = 0x04000208;
+constexpr int IO_DISPCNT = 0x04000000;
+constexpr int IO_GREENSWAP = 0x04000002;
+constexpr int IO_DISPSTAT = 0x04000004;
+constexpr int IO_VCOUNT = 0x04000006;
+constexpr int IO_BG0CNT = 0x04000008;
+constexpr int IO_BG1CNT = 0x0400000a;
+constexpr int IO_BG2CNT = 0x0400000c;
+constexpr int IO_BG3CNT = 0x0400000e;

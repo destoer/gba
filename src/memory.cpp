@@ -16,7 +16,7 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu)
     // alloc our underlying system memory
     bios_rom.resize(0x4000);
     board_wram.resize(0x40000);
-    chip_wram.resize(8000);
+    chip_wram.resize(0x8000);
     io.resize(0x400);
     bg_ram.resize(0x400);
     vram.resize(0x18000);
@@ -45,6 +45,13 @@ void Mem::tick_mem_access(int mode)
 
 uint32_t Mem::read_external(uint32_t addr,Access_type mode)
 {
+
+    if((addr&0x1FFFFFF) > rom.size())
+    {
+        printf("rom read out of range: %08x:%08x\n",addr&0x1FFFFFF,rom.size());
+        exit(1);
+    }
+
     switch((addr >> 24) & 0xf)
     {
         case 0x8: // wait state 0
@@ -52,7 +59,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
         {
             mem_region = ROM;
             //return rom[addr - 0x08000000];
-            return handle_read(rom,addr-0x08000000,mode);
+            return handle_read(rom,addr&0x1FFFFFF,mode);
             break;
         }
 
@@ -61,7 +68,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
         {
             mem_region = ROM;
             //return rom[addr - 0x0a000000];
-            return handle_read(rom,addr-0x0a000000,mode);
+            return handle_read(rom,addr&0x1FFFFFF,mode);
             break;
         }
             
@@ -70,7 +77,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
         {
             mem_region = ROM;
             //return rom[addr - 0x0c000000];
-            return handle_read(rom,addr-0x0c000000,mode);
+            return handle_read(rom,addr&0x1FFFFFF,mode);
             break;
         }
 
@@ -124,13 +131,42 @@ uint8_t Mem::read_io_regs(uint32_t addr)
 {
     switch(addr)
     {
+
+        case IO_DISPCNT:
+        {
+            return io[addr&IO_MASK];
+            break;
+        }
+
+        case IO_DISPCNT+1:
+        {
+            return io[addr&IO_MASK];
+            break;
+        }
+
+        // bit one toggle green swap (ingore for now)
+        case IO_GREENSWAP:
+        {
+            return 0; 
+            break;
+        }
+
+        case IO_GREENSWAP+1:
+        {
+            return 0;
+            break;
+        }
+
+
         case IO_IME: // 0th bit toggles ime
         {
             return ime;
+            break;
         }
         case IO_IME + 1:
         { 
             return 0; // do nothing
+            break;
         }
 
         //unused
@@ -138,6 +174,7 @@ uint8_t Mem::read_io_regs(uint32_t addr)
         case 0x400020B:
         { 
             return 0;
+            break;
         }
 
         default:
@@ -402,6 +439,86 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
 {
     switch(addr)
     {
+
+
+        case IO_DISPCNT:
+        {
+            // gba / cgb mode is reserved
+            io[addr&IO_MASK] = v & ~8;
+            break;
+        }
+
+        case IO_DISPCNT+1:
+        {
+            io[addr&IO_MASK] = v;
+            break;
+        }
+
+        // bit one toggle green swap (ingore for now)
+        case IO_GREENSWAP:
+        {
+                
+            break;
+        }
+
+        case IO_GREENSWAP+1:
+        {
+            break;
+        }
+
+
+        case IO_DISPSTAT:
+        {
+            // first 3 bits read only
+            // 6 and 7 are unused
+            io[addr&IO_MASK] = v & ~0xc3;
+            break;
+        }
+
+        
+        case IO_DISPSTAT+1: // vcount (lyc)
+        {
+            io[addr&IO_MASK] = v;
+            break;
+        }
+
+        case IO_VCOUNT: // (ly)
+        case IO_VCOUNT+1:
+        {
+            break;
+        }
+
+        // probs should store the bgcnts
+        // in a easy to access array
+        case IO_BG0CNT:
+        case IO_BG0CNT+1:
+        {
+            io[addr&IO_MASK] = v;
+            break;
+        }
+
+        case IO_BG1CNT:
+        case IO_BG1CNT+1:
+        {
+            io[addr&IO_MASK] = v;
+            break;
+        }
+
+        case IO_BG2CNT:
+        case IO_BG2CNT+1:
+        {
+            io[addr&IO_MASK] = v;
+            break;
+        }
+
+        case IO_BG3CNT:
+        case IO_BG3CNT+1:
+        {
+            io[addr&IO_MASK] = v;
+            break;
+        }
+
+
         case IO_IME: // 0th bit toggles ime
         {
             ime = is_set(v,0);
@@ -409,15 +526,18 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         }
         case IO_IME + 1:
         { 
-            return; // do nothing
+            break; // do nothing
         }
 
         //unused
         case 0x400020A: 
         case 0x400020B:
         { 
-            return;
+            break;
         }
+
+
+
 
         default:
         {    
@@ -472,6 +592,7 @@ void Mem::write_oam(uint32_t addr,uint32_t v,Access_type mode)
 void Mem::write_vram(uint32_t addr,uint32_t v,Access_type mode)
 {
     mem_region = VRAM;
+    printf("vram write %08x\n",addr);
     //vram[addr-0x06000000] = v;
     handle_write(vram,addr-0x06000000,v,mode);
 }

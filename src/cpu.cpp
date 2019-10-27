@@ -12,6 +12,7 @@ void Cpu::init(Display *disp, Mem *mem, Debugger *debug, Disass *disass)
     cpu_mode = SYSTEM; // system mode
     is_thumb = false;  // cpu in arm mode
     regs[PC] = 0x08000000; // cartrige reset vector
+    regs[LR] = 0x08000000;
     cpsr = 0x1f;
     regs[SP] = 0x03007f00;
     //arm_fill_pipeline(); // fill the intitial cpu pipeline
@@ -32,34 +33,74 @@ void Cpu::init_thumb_opcode_table()
     for(int i = 0; i < 256; i++)
     {
 
+        //THUMB.14: push/pop registers
+        if(((i >> 4) & 0b1111) == 0b1011 
+            && ((i >> 1) & 0b11) == 0b10)
+        {
+            thumb_opcode_table[i] = thumb_push_pop;
+        }
+
+
+        // THUMB.9: load/store with immediate offset
+        else if(((i>>5) & 0b111) == 0b011)
+        {
+            thumb_opcode_table[i] = thumb_ldst_imm;
+        }
+
+
+        // THUMB.5: Hi register operations/branch exchange
+        else if(((i >> 2) & 0b111111) == 0b010001)
+        {
+            thumb_opcode_table[i] = thumb_hi_reg_ops;
+        }
+
+
+
+        //  THUMB.15: multiple load/store
+        else if(((i >> 4) & 0b1111) == 0b1100)
+        {
+            thumb_opcode_table[i] = thumb_multiple_load_store;
+        }
+
+        // THUMB.2: add/subtract
+        else if(((i >> 3) & 0b11111) == 0b00011)
+        {
+            thumb_opcode_table[i] = thumb_add_sub;
+        }
+
+        // THUMB.4: ALU operations
+        else if(((i >> 2) & 0b111111) == 0b010000)
+        {
+            thumb_opcode_table[i] = thumb_alu;
+        }
+
         // THUMB.19: long branch with link
-        if((i >> 4) == 0xf)
+        else if(((i >> 4) & 0b1111) == 0b1111)
         {
             thumb_opcode_table[i] = thumb_long_bl;
         }
 
         // THUMB.6: load PC-relative
-        else if(((i >> 3) & 0b01001) ==  0b01001)
+        else if(((i >> 3) & 0b11111) ==  0b01001)
         {
             thumb_opcode_table[i] = thumb_ldr_pc;
         }
 
         // THUMB.3: move/compare/add/subtract immediate
-        else if(((i >> 5) & 0b001) == 0b001)
+        else if(((i >> 5) & 0b111) == 0b001)
         {
             thumb_opcode_table[i] = thumb_mcas_imm;
         }
 
-
         // THUMB.1: move shifted register
-        else if(((i >> 5) & 0x7) == 0)
+        // top 3 bits unset
+        else if(((i >> 5) & 0b111) == 0b000)
         {
             thumb_opcode_table[i] = thumb_mov_reg_shift;
         }
 
-
         // THUMB.16: conditional branch
-        else if((i >> 4) == 0b1101)
+        else if(((i >> 4)  & 0b1111) == 0b1101)
         {
             thumb_opcode_table[i] = thumb_cond_branch;
         }
@@ -67,7 +108,7 @@ void Cpu::init_thumb_opcode_table()
         else 
         {
             thumb_opcode_table[i] = thumb_unknown;
-        }                
+        }                 
     }
 }
 
@@ -462,27 +503,40 @@ bool Cpu::cond_met(int opcode)
 
 // common arithmetic and logical operations
 
-// add two ints and handle flags
-// unsure how we set v
+
 uint32_t Cpu::add(uint32_t v1, uint32_t v2, bool s)
 {
+    uint32_t ans = v1 + v2;
     if(s)
     {
-        uint64_t ans = v1 + v2;
+        bool set_c = ans < v1;
+        
 
-        cpsr = is_set(ans,32)? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
+        cpsr = set_c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
+
+        bool set_v = test_v(v1,v2,(v1+v2));
+        cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
 
         set_nz_flag(ans);
 
         return ans;
     }
 
-    
-    else
-    {
-        return v1 + v2;
-    }
-
+    return ans;
 }
 
 
+uint32_t Cpu::sub(uint32_t v1, uint32_t v2, bool s)
+{
+    uint32_t ans = v1 - v2;
+    if(s)
+    {
+        cpsr = (v1 >= v2)? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+
+        bool set_v = test_v(v1,v2,ans);
+        cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
+
+        set_nz_flag(ans);
+    }
+    return ans;
+}

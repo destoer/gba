@@ -230,3 +230,21 @@ inline uint32_t barrel_shift(Shift_type type,uint32_t v, uint32_t n, bool &did_c
     puts("barrel shifter fell though!?");
     exit(1);
 }
+
+// set if an overflow occurs
+// likely a faster way to do this but thisll do for now
+inline bool test_v(uint32_t v1, uint32_t v2, uint32_t ans)
+{
+    if(!is_set(v1,31) && !is_set(v2,31) && is_set(ans,31))
+    {
+        return true;
+    } 
+
+    if(is_set(v1,31) && is_set(v2,31) && !is_set(ans,31))
+    {
+        return true;
+    } 
+
+
+    return false;
+}

@@ -81,4 +81,9 @@ private:
     std::string disass_thumb_mcas_imm(uint16_t opcode);
     std::string disass_thumb_long_bl(uint16_t opcode);
     std::string disass_thumb_alu(uint16_t opcode);
+    std::string disass_thumb_add_sub(uint16_t opcode);
+    std::string disass_thumb_multiple_load_store(uint16_t opcode);
+    std::string disass_thumb_hi_reg_ops(uint16_t opcode);
+    std::string disass_thumb_ldst_imm(uint16_t opcode);
+    std::string disass_thumb_push_pop(uint16_t opcode);
 };

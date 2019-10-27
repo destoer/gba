@@ -45,30 +45,344 @@ void Cpu::execute_thumb_opcode(uint16_t instr)
     std::invoke(thumb_opcode_table[op],this,instr);    
 }
 
+
+void Cpu::thumb_push_pop(uint16_t opcode)
+{
+    const bool pop = is_set(opcode,11);
+
+    const bool lr = is_set(opcode,8);
+
+    const uint8_t reg_range = opcode & 0xff;
+
+    int n = 0;
+
+    if(pop)
+    {
+        for(int i = 0; i < 8; i++)
+        {
+            if(is_set(reg_range,i))
+            {
+                n++;
+                regs[i] = mem->read_memt(regs[SP],WORD);
+                regs[SP] += ARM_WORD_SIZE;
+            }
+        }
+
+        // nS +1N +1I (pop) | (n+1)S +2N +1I(pop pc)
+        if(lr)
+        {
+            regs[PC] = mem->read_memt(regs[SP],WORD) & ~1;
+            regs[SP] += ARM_WORD_SIZE;
+            cycle_tick((n+1) + 3);
+        }
+
+        else
+        {
+            cycle_tick(n + 2);
+        }
+
+    }
+
+
+    else // push
+    {
+        // addresses allways handled increasing
+        // in this case the cpu calcs how far back
+        // it needs to go first
+        for(int i = 0; i < 8; i++)
+        {
+            if(is_set(reg_range,i))
+            {
+                n++;
+                regs[SP] -= ARM_WORD_SIZE;
+            }
+        }
+
+
+        if(lr) 
+        {
+            regs[SP] -= ARM_WORD_SIZE;
+        }
+
+        uint32_t addr = regs[SP];
+        for(int i = 0; i < 8; i++)
+        {
+            if(is_set(reg_range,i))
+            {
+                mem->write_memt(addr,regs[i],WORD);
+                addr += ARM_WORD_SIZE;
+            }
+        }
+
+        if(lr)
+        {
+            mem->write_memt(addr,regs[LR],WORD);
+        }
+
+        // (n-1)S+2N (PUSH)
+        cycle_tick((n-1) + 2);
+    }
+
+}
+
+void Cpu::thumb_hi_reg_ops(uint16_t opcode)
+{
+    int rd = opcode & 0x7;
+    int rs = (opcode >> 3) & 0x7;
+    int op = (opcode >> 8) & 0x3;
+
+    
+
+    // 1s cycle min
+    int cycles = 1;
+
+    // can be used as bl/blx flag (not revlant for gba?)
+    bool msbd = is_set(opcode,7);
+
+    // bit 7 and 6 act as top bits of the reg
+    rd = msbd? set_bit(rd,3) : rd;
+    rs = is_set(opcode,6)? set_bit(rs,3) : rs;
+
+    int rs_val = regs[rs];
+
+    // if using PC its +4 ahead due to the pipeline
+    if(rs == PC)
+    {
+        rs_val += 2;
+    }
+
+    //2s + 1n total if using pc as rd
+    if(rd == PC)
+    {
+        cycles += 2;
+    }
+
+
+    // only cmp sets flags!
+    switch(op)
+    {
+        case 0b00: // add
+        {
+            regs[rd] += rs_val;
+            break;  
+        }
+
+        case 0b01: // cmp
+        {
+            // do sub and discard result
+            sub(regs[rd],rs_val,true);
+            break;
+        }
+
+        case 0b10: // mov
+        {
+            regs[rd] = rs_val;
+            break;
+        }
+
+        case 0b11: // bx
+        {
+            // if bit 0 of rn is a 1
+            // subsequent instrs decoded as thumb
+            is_thumb = rs_val & 1;
+
+            // branch
+            regs[PC] = rs_val & ~1;
+            cycles = 3; // 2s +1n for bx            
+            break;
+        }
+    }
+
+    cycle_tick(cycles);
+}
+
+void Cpu::thumb_alu(uint16_t opcode)
+{
+    int op = (opcode >> 6) & 0xf;
+    int rs = (opcode >> 3) & 0x7;
+    int rd = opcode & 0x7;
+
+
+
+    switch(op)
+    {
+
+        case 0xe: // bic
+        {
+            regs[rd] &= ~regs[rs];
+            set_nz_flag(regs[rd]);
+            cycle_tick(1); // 1 s cycle for bic
+            break;
+        }
+
+        case 0xa: // cmp
+        {
+            sub(regs[rs],regs[rs],true);
+            break;
+        }
+
+        default:
+        {
+            printf("thumb alu unimplemented: %08x\n",op);
+            print_regs();
+            exit(1); 
+        }
+    }
+
+
+
+}
+
+
+void Cpu::thumb_multiple_load_store(uint16_t opcode)
+{
+    int rb = (opcode >> 8) & 0x7;
+    bool load = is_set(opcode,11);
+
+    uint8_t reg_range = opcode & 0xff;
+
+    int n = 0;
+
+    for(int i = 0; i < 8; i++)
+    {
+        if(is_set(reg_range,i))
+        {
+            n++;
+            // ldmia
+            if(load)
+            {
+                regs[i] = mem->read_memt(regs[rb],WORD);
+            }
+            //stmia
+            else
+            {
+                mem->write_memt(regs[rb],regs[i],WORD);
+            }
+            regs[rb] += ARM_WORD_SIZE;
+        }
+    }
+
+    if(!load)
+    {
+        // 2n plus (n-1)s
+        cycle_tick(2 + (n-1));
+    }
+
+    else
+    {
+        // 1N + 1i + ns
+        cycle_tick(2+n);
+    }
+
+}
+
+
+void Cpu::thumb_ldst_imm(uint16_t opcode)
+{
+    int op = (opcode >> 11) & 3;
+
+    int imm = opcode >> 6 & 31;
+
+    int rb = (opcode >> 3) & 0x7;
+    int rd = opcode & 0x7;
+
+    // 1s + 1n + 1i for ldr
+    // 2n for str
+    switch(op)
+    {
+        case 0b00: // str
+        {  
+            mem->write_memt((regs[rb]+imm*4),regs[rd],WORD);
+            cycle_tick(2);
+            break;
+        }
+
+        case 0b01: // ldr
+        {
+            regs[rd] = mem->read_memt((regs[rb]+imm*4),WORD);
+            cycle_tick(3);
+            break;            
+        }
+
+        case 0b10: // strb
+        {
+            mem->write_memt((regs[rb]+imm*4),regs[rd],BYTE);
+            cycle_tick(2);
+            break;
+        }
+
+        case 0b11: // ldrb
+        {
+            regs[rd] = mem->read_memt((regs[rb]+imm*4),BYTE);
+            cycle_tick(3);       
+            break;
+        }
+    }
+
+
+}
+
+void Cpu::thumb_add_sub(uint16_t opcode)
+{
+    int rd = opcode & 0x7;
+    int rs = (opcode >> 3) & 0x7;
+    int rn = (opcode  >> 6) & 0x7; // can also be 3 bit imm
+    int op = (opcode >> 9) & 0x3;
+
+    switch(op)
+    {
+        case 0b00: // add reg
+        { 
+            regs[rd] = add(regs[rs],regs[rn],true);
+            break;
+        }
+        case 0b01: // sub reg
+        { 
+            regs[rd] = sub(regs[rs],regs[rn],true);
+            break;
+        }        
+        case 0b10: // add imm
+        { 
+            regs[rd] = add(regs[rs],rn,true);
+            break;
+        }        
+        case 0b11: // sub imm
+        { 
+            regs[rd] = sub(regs[rs],rn,true);
+            break;
+        }        
+    }
+
+    // 1 s cycle
+    cycle_tick(1);
+}
+
 void Cpu::thumb_long_bl(uint16_t opcode)
 {
-    uint16_t opcode2 = mem->read_mem(regs[PC],HALF);
-    regs[PC] += ARM_HALF_SIZE;
+    bool first = !is_set(opcode,11);
 
+    int offset = opcode & 0x7ff; // offset is 11 bits
 
-    // 11 bit addrs each
-    // total is 23 bit with bit 0 ignored
-    opcode2 &= 0b11111111111;
-    opcode &= 0b11111111111;
+    if(first)
+    {
+        // sign extend offset shifted by 12
+        // add to pc plus 4 stoe in lr
+        offset <<= 12;
+        offset = sign_extend(offset,23);
+        regs[LR] = (regs[PC]+2) + offset;
+        cycle_tick(1); // 1S
+    }
 
-    bool is_high = is_set(opcode2,11);
-
-    // 2nd instr pc is + 4 ahead
-    uint32_t addr = is_high? (opcode2) << 12 : (opcode2) << 1;
-    addr |= is_high? opcode << 12 : opcode << 1; 
-
-
-    regs[LR] = regs[PC]; // not sure if this sets lr properly
-
-    regs[PC] = addr = (addr + regs[PC]) & ~1;
-
-    //3S+1N cycles total
-    cycle_tick(4); 
+    else // 2nd instr
+    {
+        // tmp = next instr addr
+        uint32_t tmp = regs[PC];
+        // pc = lr + offsetlow << 1
+        regs[PC] = regs[LR] + (offset << 1);
+        // lr = tmp | 1
+        regs[LR] = tmp | 1;
+        cycle_tick(3); //2S+1N cycle
+    }
 
 }
 
@@ -106,12 +420,32 @@ void Cpu::thumb_mcas_imm(uint16_t opcode)
 
     switch(op)
     {
-        case 0x00: // mov
+        case 0b00: // mov
         {
             set_nz_flag(imm);
             regs[rd] = imm;
             break;
         }
+
+        case 0b10: // add
+        {
+            regs[rd] = add(regs[rd],imm,true);
+            break;
+        }
+
+        case 0b01: //cmp
+        {
+            sub(regs[rd],imm,true);
+            break;
+        }
+
+        case 0b11: // sub
+        {
+            regs[rd] = sub(regs[rd],imm,true);
+            break;
+        }
+
+
 
         default:
         {

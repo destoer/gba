@@ -357,7 +357,7 @@ void Cpu::arm_data_processing(uint32_t opcode)
 }
 
 
-// bx <-- add instr timing
+// bx 
 void Cpu::arm_branch_and_exchange(uint32_t opcode)
 {
 
@@ -370,6 +370,8 @@ void Cpu::arm_branch_and_exchange(uint32_t opcode)
     // branch
     regs[PC] = regs[rn] & ~1;
 
+    // 2s + 1n
+    cycle_tick(3);
 }
 
 // ldr , str

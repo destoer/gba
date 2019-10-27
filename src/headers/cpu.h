@@ -64,10 +64,16 @@ private:
     void thumb_cond_branch(uint16_t opcode);
     void thumb_mcas_imm(uint16_t opcode);
     void thumb_long_bl(uint16_t opcode);
+    void thumb_alu(uint16_t opcode);
+    void thumb_add_sub(uint16_t opcode);
+    void thumb_multiple_load_store(uint16_t opcode);
+    void thumb_hi_reg_ops(uint16_t opcode);
+    void thumb_ldst_imm(uint16_t opcode);
+    void thumb_push_pop(uint16_t opcode);
 
     // cpu operations eg adds
     uint32_t add(uint32_t v1, uint32_t v2, bool s);
-    
+    uint32_t sub(uint32_t v1, uint32_t v2, bool s);
 
 
 
