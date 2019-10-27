@@ -125,9 +125,18 @@ void Cpu::init_arm_opcode_table()
             {
                 int op = (i >> 5) & 0xf;
 
+                // ARM.10: Halfword, Doubleword, and Signed Data Transfer
+                // (may require more stringent checks than this)
+                // think this might cause conflicts?
+                if(((i >> 9) & 0b111) == 0b000 && is_set(i,3))
+                {
+                   arm_opcode_table[i] = arm_hds_data_transfer;
+                }
+
+
                 //ARM.3: Branch and Exchange
                 // bx
-                if(i == 0b000100100001) // <--- start here
+                else if(i == 0b000100100001) // <--- start here
                 {
                     arm_opcode_table[i] = arm_branch_and_exchange;
                 }

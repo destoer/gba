@@ -49,8 +49,6 @@ extern const char *status_banked_names[5];
 
 extern const char *mode_names[7];
 
-// instr decoding
-constexpr int L_BIT =  20;
 
 
 

@@ -55,6 +55,7 @@ private:
     void arm_psr(uint32_t opcode);
     void arm_single_data_transfer(uint32_t opcode);
     void arm_branch_and_exchange(uint32_t opcode);
+    void arm_hds_data_transfer(uint32_t opcode);
 
 
     // thumb cpu instructions

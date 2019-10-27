@@ -97,10 +97,10 @@ void Cpu::arm_branch(uint32_t opcode)
 
 
     // if the link bit is set this acts as a call instr
-    if(is_set(opcode,L_BIT))
+    if(is_set(opcode,24))
     {
         // bits 0:1  are allways cleared
-        regs[LR] = (pc & ~3);
+        regs[LR] = (regs[PC] & ~3);
     }
 
 
@@ -374,6 +374,152 @@ void Cpu::arm_branch_and_exchange(uint32_t opcode)
     cycle_tick(3);
 }
 
+
+// halfword doubleword signed data transfer
+// <-- handle instr timings
+void Cpu::arm_hds_data_transfer(uint32_t opcode)
+{
+    bool p = is_set(opcode,24);
+    bool u = is_set(opcode,23);
+    bool i = is_set(opcode,22);
+    bool l = is_set(opcode,20);
+    int rn = (opcode >> 16) & 0xf;
+    int rd = (opcode >> 12) & 0xf;
+    int op = (opcode >> 5) & 0x3;
+    bool w = is_set(opcode,21);
+
+
+
+    uint32_t addr = regs[rn];
+
+    // pc + 8
+    if(rn == PC) 
+    { 
+        addr += 4;
+    }
+
+
+    uint32_t offset;
+
+    if(!i)
+    {
+        printf("cpu hds unhandled register offset: %08x\n",regs[PC]);
+        exit(1);
+    }
+
+    else
+    {
+        uint8_t imm = opcode & 0xf;
+        imm |= (opcode >> 8) & 0xf;
+        offset = imm;
+    }
+
+
+
+    if(p) // pre
+    {
+        addr += u? +offset : -offset;
+    }
+
+    int cycles = 0;
+
+    uint32_t value = regs[rd];
+    if(rd == PC)
+    {
+        // pc + 12
+        value += 8;
+        cycles += 2; // extra 1s + 1n for pc
+    }
+
+
+    // now we choose between load and store
+    // and just switch on the opcode
+    if(l) // load
+    {
+        switch(op)
+        {
+            case 0:
+            {
+                puts("hds illegal load op");
+                break;
+            }
+
+            case 1: // ldrh
+            {
+                regs[rd] = mem->read_memt(addr,HALF);
+                cycle_tick(cycles+3); // 1s + 1n + 1i
+                break;
+            }
+
+            case 2: // ldrsb
+            {
+                regs[rd] = sign_extend(mem->read_memt(addr,BYTE),8);
+                cycle_tick(cycles+3); // 1s + 1n + 1i
+                break;
+            }
+
+            case 3: // ldrsh
+            {
+                regs[rd] = sign_extend(mem->read_memt(addr,HALF),16);
+                cycle_tick(cycles+3); // 1s + 1n + 1i
+                break;
+            }
+        }
+    }
+
+    else // store
+    {
+        switch(op)
+        {
+            case 0:
+            {
+                puts("hds illegal store op");
+                exit(1);
+            }
+
+            case 1: // strh
+            {
+                mem->write_memt(addr,value,HALF);
+                cycle_tick(2); // 2n cycles
+                break;
+            }
+
+            case 2: // ldrd
+            {
+                regs[rd] = mem->read_memt(addr,WORD);
+                regs[rd+1] = mem->read_memt(addr+ARM_WORD_SIZE,WORD);
+                cycle_tick(cycles+3); // 1s + 1n + 1i
+                break;
+            }
+
+            case 3: // strd
+            {
+                mem->write_memt(addr,regs[rd],WORD);
+                mem->write_memt(addr+ARM_WORD_SIZE,value,WORD);
+                cycle_tick(2); // 2n cycles
+                break;
+            }
+
+        }
+    }
+
+
+    // handle any write backs that occur
+    // arm says we cant use the same rd and base with a writeback
+    if(rn != rd) 
+    {
+        if(!p) // post allways do a writeback
+        {
+            regs[rn] += u? offset : -offset;
+        }
+
+        else if(w) // writeback
+        {
+            regs[rn] = addr;
+        }
+    }
+}
+
 // ldr , str
 void Cpu::arm_single_data_transfer(uint32_t opcode)
 {
@@ -386,7 +532,7 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
 
     if(!pre && w) // operate it in a seperate mode
     {
-        puts("T present operate load/store in user mode");
+        printf("T present operate load/store in user mode: : %08x!\n",regs[PC]);
         exit(1);
     }
 
@@ -403,7 +549,7 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
 
     if(is_set(opcode,25))
     {
-        puts("cpu data transfer unhandled register offset!");
+        printf("cpu data transfer unhandled register offset: %08x!\n",regs[PC]);
         exit(1);
     }
 
@@ -419,13 +565,13 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
 
     // up or down bit decides wether we add
     // or subtract the offest
-    bool add = is_set(opcode,23);
+    bool u = is_set(opcode,23);
 
     // up / down bit decides wether to add or subtract
     // the offset
     if(pre)
     {
-        addr += add? offset : -offset;
+        addr += u? offset : -offset;
     }
 
 
@@ -466,7 +612,7 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
     {
         if(!pre) // post allways do a writeback
         {
-            regs[base] += add? offset : -offset;
+            regs[base] += u? offset : -offset;
         }
 
         else if(w) // writeback

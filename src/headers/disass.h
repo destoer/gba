@@ -71,6 +71,7 @@ private:
     std::string disass_arm_get_shift_string(uint32_t opcode);
     std::string disass_arm_branch_and_exchange(uint32_t opcode);
     std::string disass_arm_psr(uint32_t opcode);
+    std::string disass_arm_hds_data_transfer(uint32_t opcode);
 
 
     // thumb disassembling

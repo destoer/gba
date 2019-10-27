@@ -16,11 +16,20 @@ void Disass::init_arm_disass_table()
             case 0b00:
             {
 
-                 int op = (i >> 5) & 0xf;
+                int op = (i >> 5) & 0xf;
+
+                // ARM.10: Halfword, Doubleword, and Signed Data Transfer
+                // (may require more stringent checks than this)
+                if(((i >> 9) & 0b111) == 0b000 && is_set(i,3))
+                {
+                    disass_arm_table[i] = disass_arm_hds_data_transfer;
+                }
+
+
 
                 //ARM.3: Branch and Exchange
                 // bx
-                if(i == 0b000100100001) // <--- start here
+                else if(i == 0b000100100001)
                 {
                     disass_arm_table[i] = disass_arm_branch_and_exchange;
                 }
@@ -98,7 +107,6 @@ std::string Disass::disass_arm(uint32_t opcode,uint32_t pc)
 
 std::string Disass::disass_arm_get_cond_suffix(int opcode)
 {
-
     const int cond_bits = (opcode >> 28) & 0xf;
     return std::string(suf_array[cond_bits]);
 }
@@ -106,7 +114,115 @@ std::string Disass::disass_arm_get_cond_suffix(int opcode)
 
 
 
+std::string Disass::disass_arm_hds_data_transfer(uint32_t opcode)
+{
+    bool p = is_set(opcode,24);
+    bool u = is_set(opcode,23);
+    bool i = is_set(opcode,22);
+    bool l = is_set(opcode,20);
+    int rn = (opcode >> 16) & 0xf;
+    int rd = (opcode >> 12) & 0xf;
+    int op = (opcode >> 5) & 0x3;
 
+    std::string suffix = disass_arm_get_cond_suffix(opcode);
+
+
+
+
+    std::string addr_str;
+    
+    if(p) // pre indexed
+    {
+        bool w = is_set(opcode,21);
+        if(i)
+        {
+            uint8_t imm = opcode & 0xf;
+            imm |= (opcode >> 8) & 0xf;
+            addr_str = fmt::format("[{},{}#0x{:02x}]{}",user_regs_names[rn],
+                u? "" : "-",imm,w? "!" : "");
+        }
+
+        else
+        {
+            int rm = opcode & 0xf;
+            addr_str = fmt::format("[{},{}{}]{}",user_regs_names[rn],
+                u? "" : "-",user_regs_names[rm],w? "!" : "");
+        }
+    }
+
+    else // post indexed
+    {
+        if(i)
+        {
+            uint8_t imm = opcode & 0xf;
+            imm |= (opcode >> 8) & 0xf;
+            addr_str = fmt::format("[{}], {}#0x{:02x}",user_regs_names[rn],
+                u? "" : "-",imm);
+        }
+
+        else
+        {
+            int rm = opcode & 0xf;
+            addr_str = fmt::format("[{}], {}{}",user_regs_names[rn],
+                u? "" : "-",user_regs_names[rm]);
+        }
+    }
+
+    // now do load store and switch on the opcode
+    if(l) // load
+    {
+        switch(op)
+        {
+            case 0:
+            {
+                return "ads_undefined";
+            }
+
+            case 1:
+            {
+                return fmt::format("ldr{}h {},{}",suffix,user_regs_names[rd],addr_str);
+            }
+
+            case 2:
+            {
+                return fmt::format("ldr{}sb {},{}",suffix,user_regs_names[rd],addr_str);
+            }
+
+            case 3:
+            {
+                return fmt::format("ldr{}sh {},{}",suffix,user_regs_names[rd],addr_str);
+            }
+        }
+    }
+
+    else // store
+    {
+        switch(op)
+        {
+            case 0:
+            {
+                return "ads_undefined";
+            }
+
+            case 1:
+            {
+                return fmt::format("str{}h {},{}",suffix,user_regs_names[rd],addr_str);
+            }
+
+            case 2:
+            {
+                return fmt::format("ldr{}d {},{}",suffix,user_regs_names[rd],addr_str);
+            }
+
+            case 3:
+            {
+                    return fmt::format("str{}d {},{}",suffix,user_regs_names[rd],addr_str);
+            }
+        }
+    }
+    puts("disass_arm_hds_data_transfer fell through!?");
+    exit(1);
+}
 
 // get a shift type diassembeld from an opcode
 std::string Disass::disass_arm_get_shift_string(uint32_t opcode)
@@ -274,9 +390,9 @@ std::string Disass::disass_arm_branch(uint32_t opcode)
 
 
     // if the link bit is set this acts as a call instr
-    if(is_set(opcode,L_BIT))
+    if(is_set(opcode,24))
     {
-        output = fmt::format("bal{} #0x{:08x}",suffix,pc);
+        output = fmt::format("bl{} #0x{:08x}",suffix,pc);
     }
 
 
