@@ -1,4 +1,5 @@
 #include "headers/cpu.h"
+#include "headers/display.h"
 
 void Cpu::init(Display *disp, Mem *mem, Debugger *debug, Disass *disass)
 {
@@ -125,10 +126,24 @@ void Cpu::init_arm_opcode_table()
             {
                 int op = (i >> 5) & 0xf;
 
+                //  ARM.7: Multiply and Multiply-Accumulate (MUL,MLA)
+                if(((i & 0b1111) == 0b1001) && ((i >> 6) & 0b000000) == 0b000000) 
+                {
+                    arm_opcode_table[i] = arm_mul;
+                }
+
+                // Single Data Swap (SWP)  
+                else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b11111) == 0b00010)
+                {
+                    arm_opcode_table[i] = arm_swap;
+                }
+
+
+
                 // ARM.10: Halfword, Doubleword, and Signed Data Transfer
                 // (may require more stringent checks than this)
                 // think this might cause conflicts?
-                if(((i >> 9) & 0b111) == 0b000 && is_set(i,3))
+                else if(((i >> 9) & 0b111) == 0b000 && is_set(i,3))
                 {
                    arm_opcode_table[i] = arm_hds_data_transfer;
                 }
@@ -149,7 +164,7 @@ void Cpu::init_arm_opcode_table()
                 
                 // check it ocupies the unused space for
                 //TST,TEQ,CMP,CMN with a S of zero
-                else if(op >= 0b1000 && op <= 0b1011)
+                else if(op >= 0b1000 && op <= 0b1011 && !is_set(i,4))
                 {
                     arm_opcode_table[i] = arm_psr;
                 }
@@ -186,6 +201,15 @@ void Cpu::init_arm_opcode_table()
                     arm_opcode_table[i] = arm_branch;
                 }
 
+
+                // 100
+                // ARM.11: Block Data Transfer (LDM,STM)
+                else if(!is_set(i,9))
+                {
+                    arm_opcode_table[i] = arm_block_data_transfer;
+                }
+
+
                 else 
                 {
                     arm_opcode_table[i] = arm_unknown;
@@ -206,7 +230,7 @@ void Cpu::init_arm_opcode_table()
 
 void Cpu::cycle_tick(int cycles)
 {
-    (void)cycles;
+    disp->tick(cycles);
 }
 
 // get this booting into armwrestler
@@ -508,23 +532,25 @@ bool Cpu::cond_met(int opcode)
     exit(1);
 }
 
-
-
 // common arithmetic and logical operations
 
 
+// unsure on my v flag code...
+
 uint32_t Cpu::add(uint32_t v1, uint32_t v2, bool s)
 {
+
+    bool sign = is_set(v1,31) | is_set(v2,31);
+
     uint32_t ans = v1 + v2;
     if(s)
     {
-        bool set_c = ans < v1;
+        // how to set this shit?
         
+        bool set_v = sign != is_set(ans,31);
 
-        cpsr = set_c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
-
-        bool set_v = test_v(v1,v2,(v1+v2));
-        cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
+        cpsr = ans < v1? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
+        cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT); 
 
         set_nz_flag(ans);
 
@@ -537,14 +563,37 @@ uint32_t Cpu::add(uint32_t v1, uint32_t v2, bool s)
 
 uint32_t Cpu::sub(uint32_t v1, uint32_t v2, bool s)
 {
+    bool sign = is_set(v1,31) | is_set(v2,31);
     uint32_t ans = v1 - v2;
     if(s)
     {
+        bool set_v = sign != is_set(ans,31);
         cpsr = (v1 >= v2)? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
-
-        bool set_v = test_v(v1,v2,ans);
         cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
 
+
+        set_nz_flag(ans);
+    }
+    return ans;
+}
+
+uint32_t Cpu::logical_and(uint32_t v1, uint32_t v2, bool s)
+{
+    uint32_t ans = v1 & v2;
+
+    if(s)
+    {
+        set_nz_flag(ans);
+    }
+
+    return ans;
+}
+
+uint32_t Cpu::logical_or(uint32_t v1, uint32_t v2, bool s)
+{
+    uint32_t ans = v1 | v2;
+    if(s)
+    {
         set_nz_flag(ans);
     }
     return ans;

@@ -18,9 +18,24 @@ void Disass::init_arm_disass_table()
 
                 int op = (i >> 5) & 0xf;
 
+
+                //  ARM.7: Multiply and Multiply-Accumulate (MUL,MLA)
+                if(((i & 0b1111) == 0b1001) && ((i >> 6) & 0b000000) == 0b000000) 
+                {
+                    disass_arm_table[i] = disass_arm_mul;
+                }
+
+                // Single Data Swap (SWP)  
+                else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b11111) == 0b00010)
+                {
+                    disass_arm_table[i] = disass_arm_swap;
+                }
+
+
+
                 // ARM.10: Halfword, Doubleword, and Signed Data Transfer
                 // (may require more stringent checks than this)
-                if(((i >> 9) & 0b111) == 0b000 && is_set(i,3))
+                else if(((i >> 9) & 0b111) == 0b000 && is_set(i,3))
                 {
                     disass_arm_table[i] = disass_arm_hds_data_transfer;
                 }
@@ -41,7 +56,7 @@ void Disass::init_arm_disass_table()
                 // bit 20 must also be zero
                 // check it ocupies the unused space for
                 //TST,TEQ,CMP,CMN with a S of zero
-                else if(op >= 0b1000 && op <= 0b1011)
+                else if(op >= 0b1000 && op <= 0b1011 && !is_set(i,4))
                 {
                     disass_arm_table[i] = disass_arm_psr;
                 }
@@ -76,6 +91,13 @@ void Disass::init_arm_disass_table()
                 if(is_set(i,9)) // if bit 25 set
                 {
                     disass_arm_table[i] = disass_arm_branch;
+                }
+
+                // 100
+                // ARM.11: Block Data Transfer (LDM,STM)
+                else if(!is_set(i,9))
+                {
+                    disass_arm_table[i] = disass_arm_block_data_transfer;
                 }
 
                 else 
@@ -113,6 +135,87 @@ std::string Disass::disass_arm_get_cond_suffix(int opcode)
 
 
 
+std::string Disass::disass_arm_mul(uint32_t opcode)
+{
+    int rn = (opcode >> 12) & 0xf;
+    int rd = (opcode >> 16) & 0xf;
+    int rs = (opcode >> 8) & 0xf;
+    int rm = opcode & 0xf;
+    bool s = is_set(opcode,20);
+    bool a = is_set(opcode,21);
+
+    std::string suffix = disass_arm_get_cond_suffix(opcode);
+    if(s)
+    {
+        suffix += "s";
+    }
+
+    if(a) // mla
+    {
+        return fmt::format("mla{} {},{},{},{}",suffix,
+            user_regs_names[rd],user_regs_names[rm],
+            user_regs_names[rs],user_regs_names[rn]);
+    }
+
+    else // mul
+    {
+        return fmt::format("mul{} {},{},{}",suffix,
+            user_regs_names[rd],user_regs_names[rm],
+            user_regs_names[rs]);
+    }
+
+}
+
+std::string Disass::disass_arm_swap(uint32_t opcode)
+{
+    int rm = opcode & 0xf;
+    int rd = (opcode >> 12) & 0xf;
+    int rn = (opcode >> 16) & 0xf;
+
+    std::string suffix = disass_arm_get_cond_suffix(opcode);
+
+    // byte swp
+    if(is_set(opcode,22))
+    {
+        suffix += "b";
+    }
+
+    return fmt::format("swp{} {},{},{}",suffix,user_regs_names[rd],
+        user_regs_names[rm],user_regs_names[rn]);    
+}
+
+std::string Disass::disass_arm_block_data_transfer(uint32_t opcode)
+{
+    int addressing_mode = (opcode >> 23) & 0x3;
+    bool s = is_set(opcode,22); // psr or force user mode
+    bool w = is_set(opcode,21);
+    bool l = is_set(opcode,20);
+    int rn = (opcode >> 16) & 0xf;
+    int rlist = opcode & 0xffff;
+
+    const static char *names[4] = {"da","ia","db","ib"};
+
+    std::string suffix = names[addressing_mode];
+
+    std::string instr = l? "ldm" : "stm";
+
+    std::string reg_str = "{";
+
+
+    for(int i = 0; i < 16; i++)
+    {
+        if(is_set(rlist,i))
+        {
+            reg_str += fmt::format("{},",user_regs_names[i]);
+        }
+    }
+
+    reg_str[reg_str.size()-1] = '}';
+
+    return fmt::format("{}{} {}{},{}{}",instr,suffix,user_regs_names[rn],
+        w? "!" : "", reg_str, s? "^" : "");
+
+}
 
 std::string Disass::disass_arm_hds_data_transfer(uint32_t opcode)
 {
@@ -335,10 +438,9 @@ std::string Disass::disass_arm_data_processing(uint32_t opcode)
 {
     // get the register and immediate
     std::string suffix = disass_arm_get_cond_suffix(opcode);
-    if(is_set(opcode,20)) // if s bit is set
-    {
-        suffix += 's';
-    }
+
+
+
 
     int rd = (opcode >> 12) & 0xf;
 
@@ -349,12 +451,42 @@ std::string Disass::disass_arm_data_processing(uint32_t opcode)
 
     // what instr is it
     int op = (opcode >> 21) & 0xf;
+
+    if(is_set(opcode,20) && !(op >= 8 && op <= 0xb)) // if s bit is set and writes back to a dest
+    {
+        suffix += 's';
+    }
+
     switch((opcode >> 21) & 0xf)
     {
+
+        case 0x0: // and
+        {
+            return fmt::format("and{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
+            break;           
+        }
+
+        case 0x2: // sub
+        {
+            return fmt::format("sub{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
+            break;            
+        }
 
         case 0x4: // add
         {
             return fmt::format("add{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
+            break;
+        }
+
+        case 0xa: // cmp
+        {
+            return fmt::format("cmp{} {},{}",suffix,user_regs_names[rn],operand2);
+            break;
+        }
+
+        case 0xc: // orr
+        {
+            return fmt::format("orr{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
             break;
         }
 
@@ -372,6 +504,7 @@ std::string Disass::disass_arm_data_processing(uint32_t opcode)
     }
 }
 
+// negative calc on a branch messes up horribly
 std::string Disass::disass_arm_branch(uint32_t opcode)
 {
     pc += 4;
@@ -382,6 +515,7 @@ std::string Disass::disass_arm_branch(uint32_t opcode)
     // 24 bit offset is shifted left 2
     // and extended to a 32 bit int
     int32_t offset = (opcode & 0xffffff) << 2;
+    offset = sign_extend(offset,26);
 
     pc += offset;
 

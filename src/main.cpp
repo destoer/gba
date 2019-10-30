@@ -15,8 +15,7 @@ int main(int argc, char *argv[])
     gba.enter_debugger();
 
     // start the emulation
-    for(;;)
-    {
-        gba.run();
-    }
+    gba.run();
+
+    return 0;   
 }

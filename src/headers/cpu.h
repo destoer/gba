@@ -56,7 +56,9 @@ private:
     void arm_single_data_transfer(uint32_t opcode);
     void arm_branch_and_exchange(uint32_t opcode);
     void arm_hds_data_transfer(uint32_t opcode);
-
+    void arm_block_data_transfer(uint32_t opcode);
+    void arm_swap(uint32_t opcode);
+    void arm_mul(uint32_t opcode);
 
     // thumb cpu instructions
     void thumb_unknown(uint16_t opcode);
@@ -75,8 +77,8 @@ private:
     // cpu operations eg adds
     uint32_t add(uint32_t v1, uint32_t v2, bool s);
     uint32_t sub(uint32_t v1, uint32_t v2, bool s);
-
-
+    uint32_t logical_and(uint32_t v1, uint32_t v2, bool s);
+    uint32_t logical_or(uint32_t v1, uint32_t v2, bool s);
 
 
     // mode switching

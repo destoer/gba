@@ -144,6 +144,32 @@ uint8_t Mem::read_io_regs(uint32_t addr)
             break;
         }
 
+        // these two are just stubs atm
+        case IO_DISPSTAT:
+        {
+            return io[addr&IO_MASK];
+            break;
+        }
+
+        case IO_DISPSTAT+1:
+        {
+            return io[addr&IO_MASK];
+            break;
+        }
+
+
+        case IO_VCOUNT:
+        {
+            return io[addr&IO_MASK];
+            break;
+        }
+
+        case IO_VCOUNT+1: // not used
+        {
+            return 0x0;
+            break;
+        }
+
         // bit one toggle green swap (ingore for now)
         case IO_GREENSWAP:
         {
@@ -216,11 +242,12 @@ uint32_t Mem::read_io(uint32_t addr,Access_type mode)
         {
             uint16_t v = read_io_regs(addr);
             v |= read_io_regs(addr+1) << 8;
+            return v;
             break;
         }
     } 
 
-    puts("read_io fell through!?");
+    printf("read_io fell through: %08x\n",mode);
     exit(1);
 }
 
@@ -592,7 +619,6 @@ void Mem::write_oam(uint32_t addr,uint32_t v,Access_type mode)
 void Mem::write_vram(uint32_t addr,uint32_t v,Access_type mode)
 {
     mem_region = VRAM;
-    printf("vram write %08x\n",addr);
     //vram[addr-0x06000000] = v;
     handle_write(vram,addr-0x06000000,v,mode);
 }

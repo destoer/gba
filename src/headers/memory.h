@@ -19,6 +19,25 @@ public:
     void write_mem(uint32_t addr,uint32_t v,Access_type mode);    
     void write_memt(uint32_t addr,uint32_t v,Access_type mode);
 
+
+    // probablly a better way do this than to just give free reign 
+    // over the array (i.e for the video stuff give display class ownership)
+
+    // io regs
+    std::vector<uint8_t> io; // 0x400
+
+    // video ram
+    std::vector<uint8_t> vram; // 0x18000
+
+    // display memory
+
+    // bg/obj pallette ram
+    std::vector<uint8_t> bg_ram; // 0x400
+
+    // object attribute map
+    std::vector<uint8_t> oam; // 0x400 
+
+
 private:
     Debugger *debug;
     Cpu *cpu;
@@ -73,32 +92,14 @@ private:
     // on chip wram
     std::vector<uint8_t> chip_wram; // 0x8000
 
-    // io regs
-    std::vector<uint8_t> io; // 0x400
+
     bool ime = true;
 
-    // display memory
-
-    // bg/obj pallette ram
-    std::vector<uint8_t> bg_ram; // 0x400
-
-    // video ram
-    std::vector<uint8_t> vram; // 0x18000
-
-    // object attribute map
-    std::vector<uint8_t> oam; // 0x400 
 
     // external memory
 
     // main game rom
     std::vector<uint8_t> rom; // variable
-
-
-
-
-
-
-
 
 };
 

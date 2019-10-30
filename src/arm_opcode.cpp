@@ -80,6 +80,158 @@ void Cpu::arm_unknown(uint32_t opcode)
     exit(1);
 }
 
+// neeeds a more accurate timings fix
+void Cpu::arm_mul(uint32_t opcode)
+{
+    int rn = (opcode >> 12) & 0xf;
+    int rd = (opcode >> 16) & 0xf;
+    int rs = (opcode >> 8) & 0xf;
+    int rm = opcode & 0xf;
+    bool s = is_set(opcode,20);
+    bool a = is_set(opcode,21);
+
+    if(a) // mla
+    {
+        regs[rd] = regs[rm] * regs[rs] + regs[rn];
+    }   
+
+    else // mul
+    {
+        regs[rd] = regs[rm] * regs[rs];
+    }
+
+    if(s)
+    {
+        set_nz_flag(regs[rd]);
+
+        // c destroyed
+        deset_bit(cpsr,C_BIT);
+    }
+
+    cycle_tick(1);
+}
+
+void Cpu::arm_swap(uint32_t opcode)
+{
+    int rm = opcode & 0xf;
+    int rd = (opcode >> 12) & 0xf;
+    int rn = (opcode >> 16) & 0xf;
+
+    Access_type type = is_set(opcode,22) ? BYTE : WORD;
+
+    // rd = [rn], [rn] = rm
+    regs[rd] = mem->read_memt(regs[rn],type);
+    mem->write_memt(regs[rn],regs[rm],type);
+
+    // 1s +2n +1i
+    cycle_tick(4);
+
+}
+
+// dont think this implements all of the behavior
+void Cpu::arm_block_data_transfer(uint32_t opcode)
+{
+    bool p = is_set(opcode,24);
+    bool u = is_set(opcode,23);
+    bool s = is_set(opcode,22); // psr or force user mode
+    bool w = is_set(opcode,21);
+    bool l = is_set(opcode,20);
+    int rn = (opcode >> 16) & 0xf;
+    int rlist = opcode & 0xffff;
+
+
+    if(s)
+    {
+        printf("arm block data transfer unhandled s flag: %08x\n",regs[PC]);
+        exit(1);
+    }
+
+    uint32_t addr = regs[rn];
+    int n = 0;
+
+    for(int i = 0; i < 16; i++)
+    {
+        if(is_set(rlist,i))
+        {
+            n++;
+        }
+    }
+
+    // allways adding on address so if its -
+    // we need to precalc the buttom1
+    if(!u) 
+    {
+        addr -= n * ARM_WORD_SIZE;
+        if(w)
+        {
+            regs[rn] = addr;
+        }        
+    }
+
+
+
+
+
+    for(int i = 0; i < 16; i++)
+    {
+        if(!is_set(rlist,i))
+        {
+            continue;
+        }
+
+        if(p) 
+        {
+            addr += ARM_WORD_SIZE;
+        }
+
+
+        if(l) // load
+        {
+            regs[i] = mem->read_memt(addr,WORD);
+        }
+
+        else // store
+        {
+            mem->write_memt(addr,regs[i],WORD);
+        }
+
+        if(!p)
+        {
+            addr += ARM_WORD_SIZE;
+        }
+    }
+
+    //writeback higher address if it went up
+    if(w && u)
+    {
+        regs[rn] = addr;
+    }
+
+
+    if(l)
+    {
+        if(rn != PC)
+        {
+            // ns+1n+1i
+            cycle_tick(n+2);
+        }
+
+        else
+        {
+            // (n+1)S +2n + 1i
+            cycle_tick(n+4);
+        }
+
+    }
+
+    else
+    {
+        //n-1S +2n
+        cycle_tick(n+1);
+    }
+
+}
+
 
 // need to handle instr variants and timings on these
 
@@ -94,7 +246,7 @@ void Cpu::arm_branch(uint32_t opcode)
     // 24 bit offset is shifted left 2
     // and extended to a 32 bit int
     int32_t offset = (opcode & 0xffffff) << 2;
-
+    offset = sign_extend(offset,26);
 
     // if the link bit is set this acts as a call instr
     if(is_set(opcode,24))
@@ -320,11 +472,43 @@ void Cpu::arm_data_processing(uint32_t opcode)
     // switch on the opcode to decide what to do
     switch((opcode >> 21) & 0xf)
     {
+        case 0x0: //and
+        {
+            regs[rd] = logical_and(op1,op2,update_flags);
+            if(update_flags)
+            {
+                cpsr = shift_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            }
+            break;
+        }
 
+        case 0x2: // sub
+        {
+            regs[rd] = sub(op1,op2,update_flags);
+            break;
+        }
 
         case 0x4: // add
         {
             regs[rd] = add(op1,op2,update_flags);
+            break;
+        }
+
+
+        case 0xa: // cmp
+        {
+            sub(op1,op2,true);
+            break;
+        }
+
+
+        case 0xc: //orr
+        {
+            regs[rd] = logical_or(op1,op2,update_flags);
+            if(update_flags)
+            {
+                cpsr = shift_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            }            
             break;
         }
 
