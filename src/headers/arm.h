@@ -145,7 +145,7 @@ inline uint32_t lsl(uint32_t v, uint32_t n, bool &carry)
 
 inline uint32_t lsr(uint32_t v, uint32_t n, bool &carry)
 {
-    if(!n) return v;
+    if(!n)  { n = 32; }
 
     if(n >= 32)
     {
@@ -171,7 +171,7 @@ inline uint32_t lsr(uint32_t v, uint32_t n, bool &carry)
 
 inline uint32_t asr(uint32_t v, uint32_t n, bool &carry)
 {
-    if(!n) return v;
+    if(!n)  { n = 32; }
 
 
     if(n >= 32)

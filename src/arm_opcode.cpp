@@ -492,28 +492,29 @@ void Cpu::arm_data_processing(uint32_t opcode)
         Shift_type type = static_cast<Shift_type>((opcode >> 5 ) & 0x3);
 
 
+
         // immediate is allways register rm
         int rm = opcode & 0xf;
         uint32_t imm = regs[rm];
 
         if(rm == PC)
         {
-            // pc +8 if used as operand
-            imm += 4; 
+            // pc + 12 if used as operand
+            imm += 8; 
+        }
+
+        // its ticked some more
+        if(rn == PC)
+        {
+            op1 += 4;
         }
 
         uint32_t shift_ammount = 0;
         // shift ammount is a register
         if(is_set(opcode,4))
         {
-            // bottom byte of rs
+            // bottom byte of rs (no r15)
             int rs = (opcode >> 8) & 0xf;
-
-            if(rs == PC)
-            {
-                // pc + 12 if used as shift ammount
-                shift_ammount += 8;
-            }     
 
             shift_ammount = regs[rs] & 0xff; 
         }
@@ -950,7 +951,7 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
     {
         if(!p) // post allways do a writeback
         {
-            regs[rn] = u? addr+offset : addr-offset;
+            regs[rn] += u? offset : -offset;
         }
 
         else if(w) // writeback

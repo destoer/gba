@@ -352,6 +352,7 @@ std::string Disass::disass_arm_get_shift_string(uint32_t opcode)
 
     else // shift type on 5 bit immediate
     {
+        puts("shift imm");
         int imm = (opcode >> 7) & 0x1f;
         // egr1, asr #0x2
 
@@ -360,9 +361,33 @@ std::string Disass::disass_arm_get_shift_string(uint32_t opcode)
             return fmt::format("{},{} #0x{:x}",user_regs_names[rm],shift_names[shift_type],imm);
         }
 
-        else // just a register to register
-        {          
-            return std::string(user_regs_names[rm]); 
+        else // depending on the shift it has a behavior
+        {         
+            Shift_type t = static_cast<Shift_type>(shift_type); 
+            switch(t)
+            {
+                case LSL: // no shift done
+                {
+                    return std::string(user_regs_names[rm]);
+                }
+
+                case LSR: // 32 shift
+                {
+                    return fmt::format("{}, lsr #0x20",user_regs_names[rm]);
+                }
+
+                case ASR: // 32 shift
+                {
+                    return fmt::format("{}, asr #0x20",user_regs_names[rm]);
+                }
+
+                case ROR: // rrx
+                {
+                    return fmt::format("{}, rrx #0x1",user_regs_names[rm],32);
+                }
+
+                default: return "reg shift_undefined!";
+            }
         }            
     } 
 }
