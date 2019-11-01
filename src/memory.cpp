@@ -24,6 +24,11 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu)
     
     // read out rom info here...
     std::cout << "rom size: " << rom.size() << "\n";
+
+
+    // all unpressed
+    io[IO_KEYINPUT&IO_MASK] = 0xff;
+    io[(IO_KEYINPUT+1)&IO_MASK] = 0xff;
 }
 
 
@@ -184,6 +189,19 @@ uint8_t Mem::read_io_regs(uint32_t addr)
         }
 
 
+        case IO_KEYINPUT:
+        {
+            return io[IO_KEYINPUT&IO_MASK];
+            break;
+        }
+
+      
+        case IO_KEYINPUT+1: // 10-15 unused
+        {
+            return io[IO_KEYINPUT&IO_MASK];
+            break;
+        }
+
         case IO_IME: // 0th bit toggles ime
         {
             return ime;
@@ -319,6 +337,15 @@ uint32_t Mem::read_mem(uint32_t addr,Access_type mode)
     // 28 bit bus
     addr &= 0x0fffffff;
 
+    // handle address alignment
+    switch(mode)
+    {
+        case BYTE: break; // free access
+        case HALF: addr &= ~1; break; 
+        case WORD: addr &= ~3; break;
+    }
+
+
     uint32_t v;
     if(addr < 0x00004000) v = read_bios(addr,mode);
     else if(addr < 0x02000000) { mem_region = UNDEFINED; return 0; }
@@ -330,6 +357,8 @@ uint32_t Mem::read_mem(uint32_t addr,Access_type mode)
     else if(addr < 0x07000000) { mem_region = UNDEFINED; return 0; }
     else if(addr < 0x08000000) v = read_oam(addr,mode);
     else v = read_external(addr,mode);
+
+
 
 
     return v;
@@ -364,6 +393,13 @@ void Mem::write_mem(uint32_t addr,uint32_t v,Access_type mode)
 
     // 28 bit bus
     addr &= 0x0fffffff;
+
+    switch(mode)
+    {
+        case BYTE: break; // free access
+        case HALF: addr &= ~1; break; 
+        case WORD: addr &= ~3; break;
+    }
 
     if(addr < 0x00004000) { mem_region = BIOS; return; } // bios is read only
     else if(addr < 0x02000000) { mem_region = UNDEFINED; return; }

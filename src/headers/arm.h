@@ -15,7 +15,7 @@ enum Access_type
 
 enum Shift_type
 {
-    LSL,LSR,ASR,ROR
+    LSL=0,LSR,ASR,ROR
 };
 
 constexpr int R0 = 0;
@@ -116,7 +116,7 @@ inline Cpu_mode cpu_mode_from_bits(int v)
 // http://www.keil.com/support/man/docs/armasm/armasm_dom1361289852998.htm
 
 
-inline uint32_t lsl(uint32_t v, uint32_t n, bool &did_carry)
+inline uint32_t lsl(uint32_t v, uint32_t n, bool &carry)
 {
     if(!n) return v;
 
@@ -125,7 +125,12 @@ inline uint32_t lsl(uint32_t v, uint32_t n, bool &did_carry)
 
         if(n >= 33)
         {
-            did_carry = true;
+            carry = false;
+        }
+
+        else
+        {
+            carry = is_set(v, 0);
         }
 
 
@@ -133,12 +138,12 @@ inline uint32_t lsl(uint32_t v, uint32_t n, bool &did_carry)
     }
 
 
-    did_carry = is_set(v, 32-n);
+    carry = is_set(v, 32-n);
 
     return v << n;
 }
 
-inline uint32_t lsr(uint32_t v, uint32_t n, bool &did_carry)
+inline uint32_t lsr(uint32_t v, uint32_t n, bool &carry)
 {
     if(!n) return v;
 
@@ -147,20 +152,24 @@ inline uint32_t lsr(uint32_t v, uint32_t n, bool &did_carry)
 
         if(n >= 33)
         {
-            did_carry = true;
+            carry = false;
         }
 
+        else
+        {
+            carry = is_set(v, 0);
+        }
 
         return 0;
     }
 
 
-    did_carry = is_set(v,n-1);
+    carry = is_set(v,n-1);
 
     return v >> n;
 }
 
-inline uint32_t asr(uint32_t v, uint32_t n, bool &did_carry)
+inline uint32_t asr(uint32_t v, uint32_t n, bool &carry)
 {
     if(!n) return v;
 
@@ -170,20 +179,20 @@ inline uint32_t asr(uint32_t v, uint32_t n, bool &did_carry)
         if(is_set(v,31))
         {
             return 0xffffffff;
-            did_carry = true;
+            carry = true;
         }
 
         else
         {
             return 0;
-            did_carry = false;
+            carry = false;
         }
     }
 
     // save the sign
     bool s = is_set(v,31);
 
-    did_carry = is_set(v,n-1);
+    carry = is_set(v,n-1);
 
     v >>= n;
 
@@ -198,32 +207,35 @@ inline uint32_t asr(uint32_t v, uint32_t n, bool &did_carry)
 }
 
 // how the heck are carrys defined on this
-inline uint32_t ror(uint32_t v, uint32_t n, bool &did_carry)
+inline uint32_t ror(uint32_t v, uint32_t n, bool &carry)
 {
 
     n %= 32;
 
-    if(n == 0) // ror #0 = rrx (handle later)
+    if(n == 0) // ror #0 = rrx  <-- need to check this
     {
-        puts("rrx ror");
-        exit(1);
+        bool c = is_set(v,0);
+        v >>= 1;
+        v = carry? set_bit(v,31) : deset_bit(v,31);
+        carry = c;
+        return v;
     }
 
 
-    did_carry = is_set(v,n-1);
+    carry = is_set(v,n-1);
 
     return rotr(v,n);
 }
 
 // barrel shifter
-inline uint32_t barrel_shift(Shift_type type,uint32_t v, uint32_t n, bool &did_carry)
+inline uint32_t barrel_shift(Shift_type type,uint32_t v, uint32_t n, bool &carry)
 {
     switch(type)
     {
-        case LSL: return lsl(v,n,did_carry); break;
-        case LSR: return lsr(v,n,did_carry); break;
-        case ASR: return asr(v,n,did_carry); break;
-        case ROR: return ror(v,n,did_carry); break;
+        case LSL: return lsl(v,n,carry); break;
+        case LSR: return lsr(v,n,carry); break;
+        case ASR: return asr(v,n,carry); break;
+        case ROR: return ror(v,n,carry); break;
     }
     puts("barrel shifter fell though!?");
     exit(1);

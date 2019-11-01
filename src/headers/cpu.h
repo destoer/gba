@@ -59,6 +59,7 @@ private:
     void arm_block_data_transfer(uint32_t opcode);
     void arm_swap(uint32_t opcode);
     void arm_mul(uint32_t opcode);
+    void arm_mull(uint32_t opcode);
 
     // thumb cpu instructions
     void thumb_unknown(uint16_t opcode);
@@ -76,9 +77,13 @@ private:
 
     // cpu operations eg adds
     uint32_t add(uint32_t v1, uint32_t v2, bool s);
+    uint32_t adc(uint32_t v1, uint32_t v2, bool s);
+    uint32_t bic(uint32_t v1, uint32_t v2, bool s);
     uint32_t sub(uint32_t v1, uint32_t v2, bool s);
+    uint32_t sbc(uint32_t v1, uint32_t v2, bool s);
     uint32_t logical_and(uint32_t v1, uint32_t v2, bool s);
     uint32_t logical_or(uint32_t v1, uint32_t v2, bool s);
+    uint32_t logical_eor(uint32_t v1, uint32_t v2, bool s);
 
 
     // mode switching
@@ -91,6 +96,9 @@ private:
     void set_zero_flag(uint32_t v);
     void set_nz_flag(uint32_t v);
 
+    void set_negative_flag_long(uint64_t v);
+    void set_zero_flag_long(uint64_t v);
+    void set_nz_flag_long(uint64_t v);
 
     Display *disp;
     Mem *mem;

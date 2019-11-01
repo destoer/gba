@@ -80,6 +80,73 @@ void Cpu::arm_unknown(uint32_t opcode)
     exit(1);
 }
 
+// add timings
+void Cpu::arm_mull(uint32_t opcode)
+{
+    UNUSED(opcode);
+    int rm = opcode & 0xf;
+    int rs = (opcode >> 8) & 0xf;
+    int rdhi = (opcode >> 16) & 0xf;
+    int rdlo = (opcode >> 12) & 0xf;
+    bool s = is_set(opcode,20);
+    bool a = is_set(opcode,21);
+    bool u = is_set(opcode,22);
+    
+
+    if(u) // unsigned
+    {
+        uint64_t ans;
+        if(a)
+        {
+            uint64_t oper = (static_cast<uint64_t>(regs[rdhi]) << 32) | regs[rdlo];
+            ans = regs[rm] * regs[rs] + oper; 
+        }
+
+        else
+        {
+            ans = regs[rm] * regs[rs];
+        }
+
+        if(s)
+        {
+            set_zero_flag_long(ans);
+        } 
+        // write the ans
+        regs[rdhi] = (ans >> 32) & 0xffffffff;
+        regs[rdlo] = ans & 0xffffffff;              
+    }
+
+    else // signed
+    {
+        int64_t ans;
+        if(a)
+        {
+            int64_t oper = (static_cast<uint64_t>(regs[rdhi]) << 32) | regs[rdlo];
+            ans = static_cast<int32_t>(regs[rm]) * static_cast<int32_t>(regs[rs]) + oper;             
+        }
+
+        else
+        {
+            ans = regs[rm] * regs[rs];
+        }
+
+        if(s)
+        {
+            set_zero_flag_long(ans);
+        }
+        // write the ans
+        regs[rdhi] = (ans >> 32) & 0xffffffff;
+        regs[rdlo] = ans & 0xffffffff;
+
+    }
+
+    // c destroyed
+    if(s)
+    {
+        cpsr = deset_bit(cpsr,C_BIT);
+    }
+}
+
 // neeeds a more accurate timings fix
 void Cpu::arm_mul(uint32_t opcode)
 {
@@ -105,7 +172,7 @@ void Cpu::arm_mul(uint32_t opcode)
         set_nz_flag(regs[rd]);
 
         // c destroyed
-        deset_bit(cpsr,C_BIT);
+        cpsr = deset_bit(cpsr,C_BIT);
     }
 
     cycle_tick(1);
@@ -128,7 +195,7 @@ void Cpu::arm_swap(uint32_t opcode)
 
 }
 
-// dont think this implements all of the behavior
+// <--- double check this code as its the most likely error source
 void Cpu::arm_block_data_transfer(uint32_t opcode)
 {
     bool p = is_set(opcode,24);
@@ -157,7 +224,7 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
         }
     }
 
-    // allways adding on address so if its -
+    // allways adding on address so if  we are in "down mode"
     // we need to precalc the buttom1
     if(!u) 
     {
@@ -165,7 +232,10 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
         if(w)
         {
             regs[rn] = addr;
-        }        
+        }
+        // invert the pre/post
+        // as predoing the addr has messed with the meaning
+        p = !p;  
     }
 
 
@@ -229,7 +299,6 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
         //n-1S +2n
         cycle_tick(n+1);
     }
-
 }
 
 
@@ -420,7 +489,7 @@ void Cpu::arm_data_processing(uint32_t opcode)
 
     else // shifted register 
     {
-        Shift_type type = static_cast<Shift_type>((opcode >>5 ) & 0x3);
+        Shift_type type = static_cast<Shift_type>((opcode >> 5 ) & 0x3);
 
 
         // immediate is allways register rm
@@ -433,20 +502,20 @@ void Cpu::arm_data_processing(uint32_t opcode)
             imm += 4; 
         }
 
-        uint32_t shift_ammount;
+        uint32_t shift_ammount = 0;
         // shift ammount is a register
         if(is_set(opcode,4))
         {
             // bottom byte of rs
             int rs = (opcode >> 8) & 0xf;
 
-            shift_ammount = regs[rs] & 0xff;
-
             if(rs == PC)
             {
                 // pc + 12 if used as shift ammount
                 shift_ammount += 8;
-            }      
+            }     
+
+            shift_ammount = regs[rs] & 0xff; 
         }
 
         else // shift ammount is an 5 bit int
@@ -482,6 +551,16 @@ void Cpu::arm_data_processing(uint32_t opcode)
             break;
         }
 
+        case 0x1: // eor
+        {
+            regs[rd] = logical_eor(op1,op2,update_flags);
+            if(update_flags)
+            {
+                cpsr = shift_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            }
+            break;            
+        }
+
         case 0x2: // sub
         {
             regs[rd] = sub(op1,op2,update_flags);
@@ -495,12 +574,41 @@ void Cpu::arm_data_processing(uint32_t opcode)
         }
 
 
-        case 0xa: // cmp
+        case 0x5: // adc
         {
-            sub(op1,op2,true);
+            regs[rd] = adc(op1,op2,update_flags);
+            break;           
+        }
+
+        case 0x6: // sbc
+        {
+            regs[rd] = sbc(op1,op2,update_flags);
             break;
         }
 
+        case 0x7: // rsc
+        {
+            regs[rd] = sbc(op2,op1,update_flags);
+            break;
+        }
+
+        case 0x8: // tst (and without writeback)
+        {
+            logical_and(op1,op2,update_flags);
+            break;
+        }
+
+        case 0xa: // cmp
+        {
+            sub(op1,op2,update_flags);
+            break;
+        }
+
+        case 0xb: // cmn
+        {
+            add(op1,op2,update_flags);
+            break;            
+        }
 
         case 0xc: //orr
         {
@@ -518,7 +626,31 @@ void Cpu::arm_data_processing(uint32_t opcode)
             // V preserved
             if(update_flags) // if the set cond bit is on
             {
-                set_nz_flag(op2);
+                set_nz_flag(regs[rd]);
+                // carry is that of the shift oper
+                cpsr = shift_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);                 
+            }
+            break;
+        }
+
+
+        case 0xe: // bic
+        {
+            regs[rd] = bic(op1,op2,update_flags);
+            if(update_flags)
+            {
+                cpsr = shift_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            }            
+            break;
+        }
+
+        case 0xf: // mvn
+        {
+            regs[rd] = ~op2;
+            // V preserved
+            if(update_flags) // if the set cond bit is on
+            {
+                set_nz_flag(regs[rd]);
                 // carry is that of the shift oper
                 cpsr = shift_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);                 
             }
@@ -526,7 +658,6 @@ void Cpu::arm_data_processing(uint32_t opcode)
 
             break;
         }
-
 
         default:
         {
@@ -585,10 +716,10 @@ void Cpu::arm_hds_data_transfer(uint32_t opcode)
 
     uint32_t offset;
 
-    if(!i)
+    if(!i) // just this?
     {
-        printf("cpu hds unhandled register offset: %08x\n",regs[PC]);
-        exit(1);
+        int rm = opcode & 0xf;
+        offset = regs[rm];
     }
 
     else
@@ -602,7 +733,7 @@ void Cpu::arm_hds_data_transfer(uint32_t opcode)
 
     if(p) // pre
     {
-        addr += u? +offset : -offset;
+        addr += u? offset : -offset;
     }
 
     int cycles = 0;
@@ -624,7 +755,7 @@ void Cpu::arm_hds_data_transfer(uint32_t opcode)
         {
             case 0:
             {
-                puts("hds illegal load op");
+                printf("hds illegal load op: %08x\n",regs[PC]);
                 break;
             }
 
@@ -657,7 +788,7 @@ void Cpu::arm_hds_data_transfer(uint32_t opcode)
         {
             case 0:
             {
-                puts("hds illegal store op");
+                printf("hds illegal store op: %08x\n",regs[PC]);
                 exit(1);
             }
 
@@ -712,9 +843,9 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
 
     bool load = is_set(opcode,20);
     bool w = is_set(opcode,21); // write back
-    bool pre = is_set(opcode,24); // pre index
+    bool p = is_set(opcode,24); // pre index
 
-    if(!pre && w) // operate it in a seperate mode
+    if(!p && w) // operate it in a seperate mode
     {
         printf("T present operate load/store in user mode: : %08x!\n",regs[PC]);
         exit(1);
@@ -722,19 +853,33 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
 
 
     int rd = (opcode >> 12) & 0xf;
-    int base = (opcode >> 16) & 0xf;
+    int rn = (opcode >> 16) & 0xf;
 
-    uint32_t addr = regs[base];
+    uint32_t addr = regs[rn];
 
     // due to prefetch pc is += 8; at this stage
-    if(base == PC) { addr += 4;}
+    if(rn == PC) 
+    { 
+        addr += 4;
+    }
 
     uint32_t offset;
 
     if(is_set(opcode,25))
     {
-        printf("cpu data transfer unhandled register offset: %08x!\n",regs[PC]);
-        exit(1);
+        Shift_type type = static_cast<Shift_type>((opcode >> 5 ) & 0x3);
+
+
+        // immediate is allways register rm
+        int rm = opcode & 0xf;
+        uint32_t imm = regs[rm];
+
+
+        // register specified shift ammounts are not allowed
+        int shift_ammount = (opcode >> 7) & 0x1f;
+        
+        bool carry = is_set(cpsr,C_BIT);
+        offset = barrel_shift(type,imm,shift_ammount,carry);
     }
 
     else // immeditate
@@ -753,7 +898,7 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
 
     // up / down bit decides wether to add or subtract
     // the offset
-    if(pre)
+    if(p)
     {
         addr += u? offset : -offset;
     }
@@ -763,7 +908,16 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
     // perform the specifed memory access
     if(load) // ldr
     {
-        regs[rd] = mem->read_memt(addr,mode);
+        if(mode == BYTE)
+        {
+            regs[rd] = mem->read_memt(addr,mode);
+        }
+
+        else // ldr and swp use rotated reads
+        {
+            regs[rd] = mem->read_memt(addr,mode);
+            regs[rd] = rotr(regs[rd],(addr&3)*8);
+        }
         cycles = 3; // 1s + 1n + 1i
 
         if(rd == PC)
@@ -785,23 +939,23 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
 
         mem->write_mem(addr,v,mode);
 
-        cycles = 2; // 2 N cycles for a sote
+        cycles = 2; // 2 N cycles for a store 
 
     }
 
 
     // handle any write backs that occur
     // arm says we cant use the same rd and base with a writeback
-    if(base != rd) 
+    if(rn != rd) 
     {
-        if(!pre) // post allways do a writeback
+        if(!p) // post allways do a writeback
         {
-            regs[base] += u? offset : -offset;
+            regs[rn] = u? addr+offset : addr-offset;
         }
 
         else if(w) // writeback
         {
-            regs[base] = addr;
+            regs[rn] = addr;
         }
     }
 

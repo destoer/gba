@@ -12,10 +12,12 @@ public:
 
 
     // read mem
+    uint32_t handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mode);
     uint32_t read_mem(uint32_t addr,Access_type mode);
     uint32_t read_memt(uint32_t addr,Access_type mode);
 
     // write mem
+    void handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access_type mode);
     void write_mem(uint32_t addr,uint32_t v,Access_type mode);    
     void write_memt(uint32_t addr,uint32_t v,Access_type mode);
 
@@ -46,7 +48,6 @@ private:
     void tick_mem_access(int mode);
 
     // read_mem helpers
-    inline uint32_t handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mode);
     uint32_t read_bios(uint32_t addr,Access_type type);
     uint32_t read_board_wram(uint32_t addr,Access_type type);
     uint32_t read_chip_wram(uint32_t addr,Access_type type);
@@ -58,7 +59,6 @@ private:
     uint32_t read_external(uint32_t addr,Access_type type);
 
     // write mem helpers
-    void handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access_type mode);
     void write_board_wram(uint32_t addr,uint32_t v,Access_type mode);
     void write_chip_wram(uint32_t addr,uint32_t v,Access_type mode);
     void write_io(uint32_t addr,uint32_t v,Access_type mode);
@@ -121,3 +121,4 @@ constexpr int IO_BG0CNT = 0x04000008;
 constexpr int IO_BG1CNT = 0x0400000a;
 constexpr int IO_BG2CNT = 0x0400000c;
 constexpr int IO_BG3CNT = 0x0400000e;
+constexpr int IO_KEYINPUT = 0x04000130;

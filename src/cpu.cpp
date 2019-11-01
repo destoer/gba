@@ -1,5 +1,6 @@
 #include "headers/cpu.h"
 #include "headers/display.h"
+#include <limits.h>
 
 void Cpu::init(Display *disp, Mem *mem, Debugger *debug, Disass *disass)
 {
@@ -127,10 +128,17 @@ void Cpu::init_arm_opcode_table()
                 int op = (i >> 5) & 0xf;
 
                 //  ARM.7: Multiply and Multiply-Accumulate (MUL,MLA)
-                if(((i & 0b1111) == 0b1001) && ((i >> 6) & 0b000000) == 0b000000) 
+                if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b111111) == 0b000000) 
                 {
                     arm_opcode_table[i] = arm_mul;
                 }
+
+                //  multiply and accumulate long
+                else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b111111) == 0b000001) 
+                {
+                    arm_opcode_table[i] = arm_mull;
+                }
+
 
                 // Single Data Swap (SWP)  
                 else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b11111) == 0b00010)
@@ -143,7 +151,7 @@ void Cpu::init_arm_opcode_table()
                 // ARM.10: Halfword, Doubleword, and Signed Data Transfer
                 // (may require more stringent checks than this)
                 // think this might cause conflicts?
-                else if(((i >> 9) & 0b111) == 0b000 && is_set(i,3))
+                else if(((i >> 9) & 0b111) == 0b000 && is_set(i,3) && is_set(i,0))
                 {
                    arm_opcode_table[i] = arm_hds_data_transfer;
                 }
@@ -353,6 +361,49 @@ void Cpu::set_nz_flag(uint32_t v)
     set_negative_flag(v);
 }
 
+
+
+
+// set zero flag based on arg
+void Cpu::set_zero_flag_long(uint64_t v)
+{
+    if(!v) // if zero set the flag else deset
+    {
+        cpsr = set_bit(cpsr,Z_BIT);
+    }
+
+    else 
+    {
+        cpsr = deset_bit(cpsr,Z_BIT);
+    }    
+}
+
+
+void Cpu::set_negative_flag_long(uint64_t v)
+{
+    if(is_set(v,63)) // is negative when signed
+    {
+        cpsr = set_bit(cpsr,N_BIT);
+    }
+
+    else
+    {
+        cpsr = deset_bit(cpsr,N_BIT);
+    }    
+}
+
+
+// both are set together commonly
+// so add a shortcut
+void Cpu::set_nz_flag_long(uint64_t v)
+{
+    set_zero_flag_long(v);
+    set_negative_flag_long(v);
+}
+
+
+
+
 void Cpu::switch_mode(Cpu_mode new_mode)
 {
     // save and load regs
@@ -477,6 +528,7 @@ void Cpu::store_registers(Cpu_mode mode)
 // tests if a cond field in an instr has been met
 bool Cpu::cond_met(int opcode)
 {
+
     // switch on the cond bits
     // (lower 4)
     switch(opcode & 0xf)
@@ -501,7 +553,7 @@ bool Cpu::cond_met(int opcode)
         case PL: return !is_set(cpsr,N_BIT);
 
         // v set
-        case VS: return is_set(cpsr,V_BIT);
+        case VS: return is_set(cpsr,V_BIT); 
 
         // v clear
         case VC: return !is_set(cpsr,V_BIT);
@@ -516,7 +568,7 @@ bool Cpu::cond_met(int opcode)
         case GE: return is_set(cpsr,N_BIT) == is_set(cpsr,V_BIT);
 
         // n not equal to v
-        case LT: return is_set(cpsr,N_BIT) != is_set(cpsr,V_BIT);
+        case LT: return is_set(cpsr,N_BIT) != is_set(cpsr,V_BIT); 
 
         // z clear and N equals v
         case GT: return !is_set(cpsr,Z_BIT) && is_set(cpsr,N_BIT) == is_set(cpsr,V_BIT);
@@ -535,22 +587,45 @@ bool Cpu::cond_met(int opcode)
 // common arithmetic and logical operations
 
 
-// unsure on my v flag code...
+// v flag needs impl
 
 uint32_t Cpu::add(uint32_t v1, uint32_t v2, bool s)
 {
-
-    bool sign = is_set(v1,31) | is_set(v2,31);
-
     uint32_t ans = v1 + v2;
     if(s)
     {
         // how to set this shit?
-        
-        bool set_v = sign != is_set(ans,31);
+        // happens when a change of sign occurs (so bit 31)
+        /// changes to somethign it shouldunt
+        //bool set_v = v1 > INT_MAX - v2 || v1 < INT_MIN - v2; 
 
         cpsr = ans < v1? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
-        cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT); 
+        //cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT); 
+
+        set_nz_flag(ans);
+
+        return ans;
+    }
+
+    return ans;
+}
+
+
+// needs double checking!
+uint32_t Cpu::adc(uint32_t v1, uint32_t v2, bool s)
+{
+
+    uint32_t v3 = is_set(cpsr,C_BIT);
+
+    uint32_t ans = v1 + v2 + v3;
+    if(s)
+    {
+        // how to set this shit?
+        
+        //bool set_v = 
+
+        cpsr = ans < (v1+v3)? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
+        //cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT); 
 
         set_nz_flag(ans);
 
@@ -563,13 +638,31 @@ uint32_t Cpu::add(uint32_t v1, uint32_t v2, bool s)
 
 uint32_t Cpu::sub(uint32_t v1, uint32_t v2, bool s)
 {
-    bool sign = is_set(v1,31) | is_set(v2,31);
     uint32_t ans = v1 - v2;
     if(s)
     {
-        bool set_v = sign != is_set(ans,31);
+        //bool set_v = 
         cpsr = (v1 >= v2)? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
-        cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
+        //cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
+
+
+        set_nz_flag(ans);
+    }
+    return ans;
+}
+
+// nneds double checking
+uint32_t Cpu::sbc(uint32_t v1, uint32_t v2, bool s)
+{
+    // subtract one from ans if carry is not set
+    uint32_t v3 = is_set(cpsr,C_BIT)? 0 : 1;
+
+    uint32_t ans = v1 - v2 - v3;
+    if(s)
+    {
+        //bool set_v = 
+        cpsr = (v1 >= (v2+v3))? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+        //cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
 
 
         set_nz_flag(ans);
@@ -592,6 +685,26 @@ uint32_t Cpu::logical_and(uint32_t v1, uint32_t v2, bool s)
 uint32_t Cpu::logical_or(uint32_t v1, uint32_t v2, bool s)
 {
     uint32_t ans = v1 | v2;
+    if(s)
+    {
+        set_nz_flag(ans);
+    }
+    return ans;
+}
+
+uint32_t Cpu::bic(uint32_t v1, uint32_t v2, bool s)
+{
+    uint32_t ans = v1 & ~v2;
+    if(s)
+    {
+        set_nz_flag(ans);
+    }
+    return ans;
+}
+
+uint32_t Cpu::logical_eor(uint32_t v1, uint32_t v2, bool s)
+{
+    uint32_t ans = v1 ^ v2;
     if(s)
     {
         set_nz_flag(ans);

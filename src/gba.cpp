@@ -69,7 +69,9 @@ void GBA::run()
 
 
         // sleep off the rest of the frame
-		// probably a bad way to do it		
+		// probably a bad way to do it	
+		// need to count the ammount of cycles in a frame instead
+		// but cut the screen copy off at the vblank point	
         //SDL_Delay(time_left(next_time));
 
 
@@ -134,6 +136,52 @@ void GBA::handle_input()
 					}
 #endif
 
+
+					case SDLK_RETURN:
+					{
+						button_event(Button::START,true);
+						break;						
+					}
+
+					case SDLK_DOWN:
+					{
+						button_event(Button::DOWN,true);
+						break;
+					}
+
+					case SDLK_UP:
+					{
+						button_event(Button::UP,true);
+						break;
+					}
+
+					case SDLK_LEFT:
+					{
+						button_event(Button::LEFT,true);
+						break;
+					}
+
+					case SDLK_RIGHT:
+					{
+						button_event(Button::RIGHT,true);
+						break;
+					}
+
+
+					case SDLK_a:
+					{
+						button_event(Button::A,true);
+						break;
+					}
+
+					case SDLK_s:
+					{
+						button_event(Button::B,true);
+						break;
+					}
+
+
+
                     default:
                     {
                         break;
@@ -146,6 +194,51 @@ void GBA::handle_input()
 			{
 				switch(event.key.keysym.sym)
 				{
+
+					case SDLK_RETURN:
+					{
+						button_event(Button::START,false);
+						break;						
+					}
+
+					case SDLK_DOWN:
+					{
+						button_event(Button::DOWN,false);
+						break;
+					}
+
+					case SDLK_UP:
+					{
+						button_event(Button::UP,false);
+						break;
+					}
+
+					case SDLK_LEFT:
+					{
+						button_event(Button::LEFT,false);
+						break;
+					}
+
+					case SDLK_RIGHT:
+					{
+						button_event(Button::RIGHT,false);
+						break;
+					}
+
+
+					case SDLK_a:
+					{
+						button_event(Button::A,false);
+						break;
+					}
+
+					case SDLK_s:
+					{
+						button_event(Button::B,false);
+						break;
+					}
+
+
                     default:
                     {
                         break;
@@ -160,4 +253,29 @@ void GBA::handle_input()
             }           
 		}
 	}    
+}
+
+// we will decide if we are going to switch our underlying memory
+// for io after the test 
+void GBA::button_event(Button b, bool down)
+{
+
+
+	uint16_t keyinput = mem.handle_read(mem.io,IO_KEYINPUT&IO_MASK,HALF);
+
+	int button = static_cast<int>(b);
+
+	// 0 = pressed
+
+	if(down)
+	{
+		keyinput = deset_bit(keyinput,button); 
+	}
+
+	else
+	{
+		keyinput = set_bit(keyinput,button);
+	}
+
+	mem.handle_write(mem.io,IO_KEYINPUT&IO_MASK,keyinput,HALF);
 }

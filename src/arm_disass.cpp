@@ -20,9 +20,15 @@ void Disass::init_arm_disass_table()
 
 
                 //  ARM.7: Multiply and Multiply-Accumulate (MUL,MLA)
-                if(((i & 0b1111) == 0b1001) && ((i >> 6) & 0b000000) == 0b000000) 
+                if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b111111) == 0b000000) 
                 {
                     disass_arm_table[i] = disass_arm_mul;
+                }
+
+                //  multiply and accumulate long
+                else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b111111) == 0b000001) 
+                {
+                    disass_arm_table[i] = disass_arm_mull;
                 }
 
                 // Single Data Swap (SWP)  
@@ -35,7 +41,7 @@ void Disass::init_arm_disass_table()
 
                 // ARM.10: Halfword, Doubleword, and Signed Data Transfer
                 // (may require more stringent checks than this)
-                else if(((i >> 9) & 0b111) == 0b000 && is_set(i,3))
+                else if(((i >> 9) & 0b111) == 0b000 && is_set(i,3) && is_set(i,0))
                 {
                     disass_arm_table[i] = disass_arm_hds_data_transfer;
                 }
@@ -133,7 +139,10 @@ std::string Disass::disass_arm_get_cond_suffix(int opcode)
     return std::string(suf_array[cond_bits]);
 }
 
-
+std::string Disass::disass_arm_mull(uint32_t opcode)
+{
+    UNUSED(opcode); return "MULL UNDEFINED";
+}
 
 std::string Disass::disass_arm_mul(uint32_t opcode)
 {
@@ -278,7 +287,7 @@ std::string Disass::disass_arm_hds_data_transfer(uint32_t opcode)
         {
             case 0:
             {
-                return "ads_undefined";
+                return "hds_load_undefined";
             }
 
             case 1:
@@ -304,7 +313,7 @@ std::string Disass::disass_arm_hds_data_transfer(uint32_t opcode)
         {
             case 0:
             {
-                return "ads_undefined";
+                return "hds_store_undefined";
             }
 
             case 1:
@@ -389,8 +398,7 @@ std::string Disass::disass_arm_psr(uint32_t opcode)
 
         if(mode == USER || mode == SYSTEM)
         {
-            puts("undefined banked psr register");
-            return "";
+            return "undefined banked psr register";
         }
 
         sr = status_banked_names[mode];
@@ -466,6 +474,12 @@ std::string Disass::disass_arm_data_processing(uint32_t opcode)
             break;           
         }
 
+        case 0x1: // eor
+        {
+            return fmt::format("eor{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
+            break;               
+        }
+
         case 0x2: // sub
         {
             return fmt::format("sub{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
@@ -478,11 +492,42 @@ std::string Disass::disass_arm_data_processing(uint32_t opcode)
             break;
         }
 
+        case 0x5: // adc
+        {
+            return fmt::format("adc{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
+            break;           
+        }
+
+        case 0x6: //sbc
+        {
+            return fmt::format("sbc{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
+            break;
+        }
+
+        case 0x7: // rsc
+        {
+            return fmt::format("rsc{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
+            break;
+        }
+
+        case 0x8: // tst
+        {
+            return fmt::format("tst{} {},{}",suffix,user_regs_names[rn],operand2);
+            break;
+        }
+
         case 0xa: // cmp
         {
             return fmt::format("cmp{} {},{}",suffix,user_regs_names[rn],operand2);
             break;
         }
+
+        case 0xb: // cmn
+        {
+            return fmt::format("cmn{} {},{}",suffix,user_regs_names[rn],operand2);
+            break;
+        }
+
 
         case 0xc: // orr
         {
@@ -496,6 +541,19 @@ std::string Disass::disass_arm_data_processing(uint32_t opcode)
             break;
         }
 
+        case 0xe: // bic
+        {
+            return fmt::format("bic{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
+            break;                       
+        }
+
+        case 0xf: // mvn
+        {
+            return fmt::format("mvn{} {},{}",suffix,user_regs_names[rd],operand2);
+            break;            
+        }
+
+
         default:
         {
             printf("unknown data processing diass %08x\n",op);
@@ -507,8 +565,6 @@ std::string Disass::disass_arm_data_processing(uint32_t opcode)
 // negative calc on a branch messes up horribly
 std::string Disass::disass_arm_branch(uint32_t opcode)
 {
-    pc += 4;
-
     std::string output;
 
 
@@ -517,7 +573,7 @@ std::string Disass::disass_arm_branch(uint32_t opcode)
     int32_t offset = (opcode & 0xffffff) << 2;
     offset = sign_extend(offset,26);
 
-    pc += offset;
+    uint32_t addr = (pc+ARM_WORD_SIZE) + offset;
 
 
     std::string suffix = disass_arm_get_cond_suffix(opcode);
@@ -526,13 +582,13 @@ std::string Disass::disass_arm_branch(uint32_t opcode)
     // if the link bit is set this acts as a call instr
     if(is_set(opcode,24))
     {
-        output = fmt::format("bl{} #0x{:08x}",suffix,pc);
+        output = fmt::format("bl{} #0x{:08x}",suffix,addr);
     }
 
 
     else 
     {
-        output = fmt::format("b{} #0x{:08x}",suffix,pc);
+        output = fmt::format("b{} #0x{:08x}",suffix,addr);
     }
 
     return output;
