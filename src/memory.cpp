@@ -280,52 +280,24 @@ uint32_t Mem::read_oam(uint32_t addr,Access_type mode)
 {
     mem_region = OAM;
     //return oam[addr & 0x3ff];
-
-    // only accessible if "hblank interval free" bit set
-    auto disp_mode = disp->get_mode();
-    if(disp_mode == VBLANK || (disp_mode == HBLANK && is_set(io[IO_DISPCNT],7)))
-    {
-        return handle_read(oam,addr&0x3ff,mode);
-    }
-
-    else
-    {
-        return 0;
-    }
+    return handle_read(oam,addr&0x3ff,mode);   
 }
 
 uint32_t Mem::read_vram(uint32_t addr,Access_type mode)
 {
     mem_region = VRAM;
     //return vram[addr-0x06000000];
-    auto disp_mode = disp->get_mode();
-    if(disp_mode == VBLANK || disp_mode == HBLANK)
-    {
-        return handle_read(vram,addr-0x06000000,mode);
-    }
+    return handle_read(vram,addr-0x06000000,mode);
+    
 
-    else 
-    {
-        return 0;
-    }
 }
 
 uint32_t Mem::read_obj_ram(uint32_t addr,Access_type mode)
 {
     mem_region = BG;
     //return bg_ram[addr & 0x3ff];
-    
-    // accessible during vblakn or hblank
-    auto disp_mode = disp->get_mode();
-    if(disp_mode == VBLANK || disp_mode == HBLANK)
-    {
-        return handle_read(bg_ram,addr&0x3ff,mode);
-    }
+    return handle_read(bg_ram,addr&0x3ff,mode);
 
-    else
-    {
-        return 0;
-    }
 }
 
 uint32_t Mem::read_board_wram(uint32_t addr,Access_type mode)
@@ -704,35 +676,21 @@ void Mem::write_oam(uint32_t addr,uint32_t v,Access_type mode)
 {
     mem_region = OAM;
     //oam[addr & 0x3ff] = v;
-
-    // only accessible if "hblank interval free" set in dispcnt
-    auto disp_mode = disp->get_mode();
-    if(disp_mode == VBLANK || (disp_mode == HBLANK && is_set(io[IO_DISPCNT],7)))
-    {
-        handle_write(oam,addr&0x3ff,v,mode);
-    }
+    handle_write(oam,addr&0x3ff,v,mode);
 }
 
 void Mem::write_vram(uint32_t addr,uint32_t v,Access_type mode)
 {
     mem_region = VRAM;
     //vram[addr-0x06000000] = v;
-    auto disp_mode = disp->get_mode();
-    if(disp_mode == VBLANK || disp_mode == HBLANK)
-    {
-        handle_write(vram,addr-0x06000000,v,mode);
-    }
+    handle_write(vram,addr-0x06000000,v,mode); 
 }
 
 void Mem::write_obj_ram(uint32_t addr,uint32_t v,Access_type mode)
 {
     mem_region = BG;
     //bg_ram[addr & 0x3ff] = v;
-    auto disp_mode = disp->get_mode();
-    if(disp_mode == VBLANK || disp_mode == HBLANK)
-    {
-        handle_write(bg_ram,addr&0x3ff,v,mode);
-    }
+    handle_write(bg_ram,addr&0x3ff,v,mode);
 }
 
 void Mem::write_board_wram(uint32_t addr,uint32_t v,Access_type mode)

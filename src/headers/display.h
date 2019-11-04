@@ -25,7 +25,7 @@ public:
 private:
 
 
-
+    void render();
     void advance_line();
 
     int cyc_cnt = 0; // current number of elapsed cycles

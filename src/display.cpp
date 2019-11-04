@@ -33,6 +33,7 @@ void Display::advance_line()
 }
 
 
+
 uint32_t convert_color(uint16_t color)
 {
     int r = color & 0x1f;
@@ -42,6 +43,37 @@ uint32_t convert_color(uint16_t color)
 
 
     return r << 19 |  g << 11 | b << 3 | 0xFF000000;
+}
+
+
+void Display::render()
+{
+    
+
+
+    int render_mode = mem->io[IO_DISPCNT] & 0x7;
+
+
+
+    switch(render_mode)
+    {
+        case 0x4: // mode 4
+        {
+            // bitmap mode 256 palette entries
+            for(int y = 0; y < Y; y++)
+            {
+                for(int x = 0; x < X; x++)
+                {
+                    uint8_t idx = mem->vram[(y*X)+x];
+                    uint16_t color = mem->bg_ram[idx*2];
+                    color |= mem->bg_ram[idx*2+1] << 8;
+                    uint32_t c = convert_color(color);
+                    screen[y][x] = c;
+                }
+            }
+            break;
+        }
+    }
 }
 
 void Display::tick(int cycles)
@@ -80,7 +112,7 @@ void Display::tick(int cycles)
             {
                 advance_line();
 
-                if(ly >= 160)
+                if(ly == 160)
                 {
                     mode = VBLANK;
                     mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],0); // set vblank flag
@@ -96,38 +128,31 @@ void Display::tick(int cycles)
 
         case VBLANK:
         {
-            if(cyc_cnt >= 960) // hblank is still active even in vblank
-            {
-                // enter hblank (dont set the internal mode here)
-                mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],1);
-            }
+
 
             // inc a line
             if(cyc_cnt >= 1232)
             {
                 advance_line();
-                if(ly >= 228)
+                if(ly == 228)
                 {
                     // exit vblank
                     new_vblank = true;
                     mode = VISIBLE;
                     mem->io[IO_DISPSTAT] = deset_bit(mem->io[IO_DISPSTAT],0);
+                    ly = 0;
 
-                    
-                    // how do i properly smash this to the screen?
-                    for(int y = 0; y < Y; y++)
-                    {
-                        for(int x = 0; x < X; x++)
-                        {
-                            uint8_t idx = mem->vram[(y*X)+x];
-                            uint16_t color = mem->bg_ram[idx*2];
-                            color |= mem->bg_ram[idx*2+1] << 8;
-                            uint32_t c = convert_color(color);
-                            screen[y][x] = c;
-                        }
-                    }
+                    render();
                 }
             }
+
+
+            else if(cyc_cnt >= 960) // hblank is still active even in vblank
+            {
+                // enter hblank (dont set the internal mode here)
+                mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],1);
+            }
+
             break;
         }
     }
