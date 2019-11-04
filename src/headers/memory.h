@@ -8,7 +8,7 @@
 class Mem
 {
 public:
-    void init(std::string filename,Debugger *debug, Cpu *cpu);
+    void init(std::string filename,Debugger *debug, Cpu *cpu, Display *disp);
 
 
     // read mem
@@ -43,7 +43,7 @@ public:
 private:
     Debugger *debug;
     Cpu *cpu;
-    
+    Display *disp;
 
     void tick_mem_access(int mode);
 
@@ -78,7 +78,20 @@ private:
 
     // memory cycle timings
     // some can be set dynamically
-    int wait_states[10][3];
+    // b w h
+    int wait_states[10][3]  = 
+    {
+        {1,1,1}, // bios rom
+        {1,1,1}, // wram 32k
+        {1,1,1}, // io
+        {1,1,1}, // oam
+        {3,3,6}, // wram 256k
+        {1,1,2}, // pallete ram
+        {1,1,2}, // vram
+        {5,5,8}, // gamepak rom
+        {5,5,8}, // gamepak flash
+        {5,5,5} // sram
+    };
 
     Memory_region mem_region;
 
@@ -112,13 +125,13 @@ private:
 constexpr int IO_MASK = 0x3ff;
 
 
-constexpr int IO_IME = 0x04000208;
-constexpr int IO_DISPCNT = 0x04000000;
-constexpr int IO_GREENSWAP = 0x04000002;
-constexpr int IO_DISPSTAT = 0x04000004;
-constexpr int IO_VCOUNT = 0x04000006;
-constexpr int IO_BG0CNT = 0x04000008;
-constexpr int IO_BG1CNT = 0x0400000a;
-constexpr int IO_BG2CNT = 0x0400000c;
-constexpr int IO_BG3CNT = 0x0400000e;
-constexpr int IO_KEYINPUT = 0x04000130;
+constexpr int IO_IME = 0x04000208 & IO_MASK;
+constexpr int IO_DISPCNT = 0x04000000 & IO_MASK;
+constexpr int IO_GREENSWAP = 0x04000002 & IO_MASK;
+constexpr int IO_DISPSTAT = 0x04000004 & IO_MASK;
+constexpr int IO_VCOUNT = 0x04000006 & IO_MASK;
+constexpr int IO_BG0CNT = 0x04000008 & IO_MASK;
+constexpr int IO_BG1CNT = 0x0400000a & IO_MASK;
+constexpr int IO_BG2CNT = 0x0400000c & IO_MASK;
+constexpr int IO_BG3CNT = 0x0400000e & IO_MASK;
+constexpr int IO_KEYINPUT = 0x04000130 & IO_MASK;

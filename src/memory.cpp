@@ -1,12 +1,14 @@
 #include "headers/memory.h"
 #include "headers/cpu.h"
 #include "headers/debugger.h"
+#include "headers/display.h"
 
-void Mem::init(std::string filename, Debugger *debug,Cpu *cpu)
+void Mem::init(std::string filename, Debugger *debug,Cpu *cpu,Display *disp)
 {
     // init component
     this->debug = debug;
     this->cpu = cpu;
+    this->disp = disp;
 
     // read out rom
     read_file(filename,rom);
@@ -27,8 +29,12 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu)
 
 
     // all unpressed
-    io[IO_KEYINPUT&IO_MASK] = 0xff;
-    io[(IO_KEYINPUT+1)&IO_MASK] = 0xff;
+    io[IO_KEYINPUT] = 0xff;
+    io[IO_KEYINPUT+1] = 0xff;
+
+
+
+
 }
 
 
@@ -134,38 +140,39 @@ uint32_t Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mo
 // this will require special handling
 uint8_t Mem::read_io_regs(uint32_t addr)
 {
+    addr &= IO_MASK;
     switch(addr)
     {
 
         case IO_DISPCNT:
         {
-            return io[addr&IO_MASK];
+            return io[addr];
             break;
         }
 
         case IO_DISPCNT+1:
         {
-            return io[addr&IO_MASK];
+            return io[addr];
             break;
         }
 
         // these two are just stubs atm
         case IO_DISPSTAT:
         {
-            return io[addr&IO_MASK];
+            return io[addr];
             break;
         }
 
         case IO_DISPSTAT+1:
         {
-            return io[addr&IO_MASK];
+            return io[addr];
             break;
         }
 
 
         case IO_VCOUNT:
         {
-            return io[addr&IO_MASK];
+            return io[addr];
             break;
         }
 
@@ -191,14 +198,14 @@ uint8_t Mem::read_io_regs(uint32_t addr)
 
         case IO_KEYINPUT:
         {
-            return io[IO_KEYINPUT&IO_MASK];
+            return io[IO_KEYINPUT];
             break;
         }
 
       
         case IO_KEYINPUT+1: // 10-15 unused
         {
-            return io[IO_KEYINPUT&IO_MASK];
+            return io[IO_KEYINPUT];
             break;
         }
 
@@ -273,21 +280,52 @@ uint32_t Mem::read_oam(uint32_t addr,Access_type mode)
 {
     mem_region = OAM;
     //return oam[addr & 0x3ff];
-    return handle_read(oam,addr&0x3ff,mode);
+
+    // only accessible if "hblank interval free" bit set
+    auto disp_mode = disp->get_mode();
+    if(disp_mode == VBLANK || (disp_mode == HBLANK && is_set(io[IO_DISPCNT],7)))
+    {
+        return handle_read(oam,addr&0x3ff,mode);
+    }
+
+    else
+    {
+        return 0;
+    }
 }
 
 uint32_t Mem::read_vram(uint32_t addr,Access_type mode)
 {
     mem_region = VRAM;
     //return vram[addr-0x06000000];
-    return handle_read(vram,addr-0x06000000,mode);
+    auto disp_mode = disp->get_mode();
+    if(disp_mode == VBLANK || disp_mode == HBLANK)
+    {
+        return handle_read(vram,addr-0x06000000,mode);
+    }
+
+    else 
+    {
+        return 0;
+    }
 }
 
 uint32_t Mem::read_obj_ram(uint32_t addr,Access_type mode)
 {
     mem_region = BG;
     //return bg_ram[addr & 0x3ff];
-    return handle_read(bg_ram,addr&0x3ff,mode);
+    
+    // accessible during vblakn or hblank
+    auto disp_mode = disp->get_mode();
+    if(disp_mode == VBLANK || disp_mode == HBLANK)
+    {
+        return handle_read(bg_ram,addr&0x3ff,mode);
+    }
+
+    else
+    {
+        return 0;
+    }
 }
 
 uint32_t Mem::read_board_wram(uint32_t addr,Access_type mode)
@@ -500,20 +538,36 @@ void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access
 
 void Mem::write_io_regs(uint32_t addr,uint8_t v)
 {
+    addr &= IO_MASK;
     switch(addr)
     {
 
 
         case IO_DISPCNT:
         {
+            // enter forced blank
+            if(!is_set(io[addr],7) && is_set(v,7))
+            {
+                puts("entering forced blank!");
+                disp->set_cycles(0);
+                disp->set_mode(VBLANK);
+            }
+
+            // leaving forced blank
+            else if(is_set(io[addr],7) && !is_set(v,7))
+            {
+                disp->set_mode(VISIBLE);
+            }
+
+
             // gba / cgb mode is reserved
-            io[addr&IO_MASK] = v & ~8;
+            io[addr] = v & ~8;
             break;
         }
 
         case IO_DISPCNT+1:
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
@@ -534,17 +588,18 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         {
             // first 3 bits read only
             // 6 and 7 are unused
-            io[addr&IO_MASK] = v & ~0xc3;
+            io[addr] = v & ~0xc3;
             break;
         }
 
         
         case IO_DISPSTAT+1: // vcount (lyc)
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
+        // read only!
         case IO_VCOUNT: // (ly)
         case IO_VCOUNT+1:
         {
@@ -556,28 +611,28 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         case IO_BG0CNT:
         case IO_BG0CNT+1:
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
         case IO_BG1CNT:
         case IO_BG1CNT+1:
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
         case IO_BG2CNT:
         case IO_BG2CNT+1:
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
         case IO_BG3CNT:
         case IO_BG3CNT+1:
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
@@ -593,8 +648,8 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         }
 
         //unused
-        case 0x400020A: 
-        case 0x400020B:
+        case 0x400020A&IO_MASK: 
+        case 0x400020B&IO_MASK:
         { 
             break;
         }
@@ -649,21 +704,35 @@ void Mem::write_oam(uint32_t addr,uint32_t v,Access_type mode)
 {
     mem_region = OAM;
     //oam[addr & 0x3ff] = v;
-    handle_write(oam,addr&0x3ff,v,mode);
+
+    // only accessible if "hblank interval free" set in dispcnt
+    auto disp_mode = disp->get_mode();
+    if(disp_mode == VBLANK || (disp_mode == HBLANK && is_set(io[IO_DISPCNT],7)))
+    {
+        handle_write(oam,addr&0x3ff,v,mode);
+    }
 }
 
 void Mem::write_vram(uint32_t addr,uint32_t v,Access_type mode)
 {
     mem_region = VRAM;
     //vram[addr-0x06000000] = v;
-    handle_write(vram,addr-0x06000000,v,mode);
+    auto disp_mode = disp->get_mode();
+    if(disp_mode == VBLANK || disp_mode == HBLANK)
+    {
+        handle_write(vram,addr-0x06000000,v,mode);
+    }
 }
 
 void Mem::write_obj_ram(uint32_t addr,uint32_t v,Access_type mode)
 {
     mem_region = BG;
     //bg_ram[addr & 0x3ff] = v;
-    handle_write(bg_ram,addr&0x3ff,v,mode);
+    auto disp_mode = disp->get_mode();
+    if(disp_mode == VBLANK || disp_mode == HBLANK)
+    {
+        handle_write(bg_ram,addr&0x3ff,v,mode);
+    }
 }
 
 void Mem::write_board_wram(uint32_t addr,uint32_t v,Access_type mode)

@@ -312,7 +312,7 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
             // store old base
             if(rn == i && i == first)
             {
-                mem->write_mem(addr,old_base,WORD);
+                mem->write_memt(addr,old_base,WORD);
             }
 
             else
@@ -1008,7 +1008,7 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
             v += 8;
         }
 
-        mem->write_mem(addr,v,mode);
+        mem->write_memt(addr,v,mode);
 
         cycles = 2; // 2 N cycles for a store 
 

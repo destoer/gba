@@ -3,7 +3,7 @@
 // init all sup compenents
 GBA::GBA(std::string filename)
 {
-    mem.init(filename,&debug,&cpu);
+    mem.init(filename,&debug,&cpu,&disp);
     disass.init(&mem,&cpu);
     disp.init(&mem);
     cpu.init(&disp,&mem,&debug,&disass);

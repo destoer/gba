@@ -11,22 +11,25 @@ void Display::init(Mem *mem)
 void Display::advance_line()
 {
     ly++;
-    mem->io[IO_VCOUNT&IO_MASK] = ly; 
+    mem->io[IO_VCOUNT] = ly; 
 
-    uint8_t lyc = mem->io[(IO_DISPSTAT+1)&IO_MASK];
+    uint8_t lyc = mem->io[IO_DISPSTAT+1];
 
     // need to fire an interrupt here if enabled
     if(ly == lyc)
     {
         // set the v counter flag
-        set_bit(mem->io[IO_DISPSTAT&IO_MASK],2);
+        mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],2);
     }
 
     else
     {
-        deset_bit(mem->io[IO_DISPSTAT&IO_MASK],2);
+        mem->io[IO_DISPSTAT] = deset_bit(mem->io[IO_DISPSTAT],2);
     }
 
+    // exit hblank
+    mem->io[IO_DISPSTAT] = deset_bit(mem->io[IO_DISPSTAT],1);
+    cyc_cnt = 0; // reset cycle counter
 }
 
 
@@ -44,16 +47,27 @@ uint32_t convert_color(uint16_t color)
 void Display::tick(int cycles)
 {
 
+
+    // forced blank is active
+    // does the display still run during this?
+    if(is_set(mem->io[IO_DISPCNT],7))
+    {
+        mode = VBLANK;
+        cyc_cnt = 0;
+        return;
+    }
+
+
     cyc_cnt += cycles;
 
     switch(mode)
     {
         case VISIBLE:
         {
-            if(cyc_cnt > 960)
+            if(cyc_cnt >= 960)
             {
-                uint8_t &dispstat = mem->io[IO_DISPSTAT&IO_MASK];
-                dispstat = set_bit(dispstat,1); // enter hblank
+                // enter hblank
+                mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],1);
                 mode = HBLANK;
             }
             break;
@@ -62,47 +76,42 @@ void Display::tick(int cycles)
         case HBLANK:
         {
             // end of line
-            if(cyc_cnt > 1232)
+            if(cyc_cnt >= 1232)
             {
-                uint8_t &dispstat = mem->io[IO_DISPSTAT&IO_MASK];
                 advance_line();
 
-                if(ly > 160)
+                if(ly >= 160)
                 {
                     mode = VBLANK;
-                    dispstat = set_bit(dispstat,0); // set vblank flag
+                    mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],0); // set vblank flag
                 }
 
                 else
                 {
                     mode = VISIBLE;
-                    dispstat = deset_bit(dispstat,1); // exit hblank
                 }
-                cyc_cnt = 0;
             }
             break;
         }
 
         case VBLANK:
         {
-            if(cyc_cnt > 960) // hblank is still active even in vblank
+            if(cyc_cnt >= 960) // hblank is still active even in vblank
             {
-                uint8_t &dispstat = mem->io[IO_DISPSTAT&IO_MASK];
-                dispstat = set_bit(dispstat,1); // enter hblank
+                // enter hblank (dont set the internal mode here)
+                mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],1);
             }
 
             // inc a line
-            if(cyc_cnt > 1232)
+            if(cyc_cnt >= 1232)
             {
-                uint8_t &dispstat = mem->io[IO_DISPSTAT&IO_MASK];
-
                 advance_line();
-                if(ly > 228)
+                if(ly >= 228)
                 {
                     // exit vblank
                     new_vblank = true;
                     mode = VISIBLE;
-                    dispstat = deset_bit(dispstat,0);
+                    mem->io[IO_DISPSTAT] = deset_bit(mem->io[IO_DISPSTAT],0);
 
                     
                     // how do i properly smash this to the screen?
@@ -118,9 +127,6 @@ void Display::tick(int cycles)
                         }
                     }
                 }
-                // exit hblank
-                dispstat = deset_bit(dispstat,1);
-                cyc_cnt = 0;
             }
             break;
         }
