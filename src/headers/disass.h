@@ -90,4 +90,9 @@ private:
     std::string disass_thumb_hi_reg_ops(uint16_t opcode);
     std::string disass_thumb_ldst_imm(uint16_t opcode);
     std::string disass_thumb_push_pop(uint16_t opcode);
+    std::string disass_thumb_load_store_sbh(uint16_t opcode);
+    std::string disass_thumb_load_store_half(uint16_t opcode);
+    std::string disass_thumb_branch(uint16_t opcode);
+    std::string disass_thumb_get_rel_addr(uint16_t opcode);
+    std::string disass_thumb_load_store_reg(uint16_t opcode);
 };

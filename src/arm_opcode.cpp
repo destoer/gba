@@ -90,60 +90,59 @@ void Cpu::arm_mull(uint32_t opcode)
     int rdlo = (opcode >> 12) & 0xf;
     bool s = is_set(opcode,20);
     bool a = is_set(opcode,21);
-    bool u = is_set(opcode,22);
+    bool u = !is_set(opcode,22);
     
+
+    uint64_t result;
 
     if(u) // unsigned
     {
         uint64_t ans;
         if(a)
         {
-            uint64_t oper = (static_cast<uint64_t>(regs[rdhi]) << 32) | regs[rdlo];
-            ans = regs[rm] * regs[rs] + oper; 
+            uint64_t oper = ((uint64_t)regs[rdhi] << 32) | (uint64_t)regs[rdlo];
+            ans = (uint64_t)regs[rs] * (uint64_t)regs[rm] + oper;
         }
 
         else
         {
-            ans = regs[rm] * regs[rs];
+            ans = (uint64_t)regs[rs] * (uint64_t)regs[rm];
         }
-
-        if(s)
-        {
-            set_zero_flag_long(ans);
-        } 
-        // write the ans
-        regs[rdhi] = (ans >> 32) & 0xffffffff;
-        regs[rdlo] = ans & 0xffffffff;              
+        result = ans;       
     }
 
     else // signed
     {
         int64_t ans;
+        int64_t v1 = sign_extend(regs[rs],32);
+        int64_t v2 = sign_extend(regs[rm],32);
         if(a)
         {
-            int64_t oper = (static_cast<uint64_t>(regs[rdhi]) << 32) | regs[rdlo];
-            ans = static_cast<int32_t>(regs[rm]) * static_cast<int32_t>(regs[rs]) + oper;             
+            int64_t oper = ((int64_t)regs[rdhi] << 32) | (int64_t)regs[rdlo];
+            ans =  v1 * v2 + oper;
         }
 
         else
         {
-            ans = regs[rm] * regs[rs];
+            ans = v1 * v2;
         }
-
-        if(s)
-        {
-            set_zero_flag_long(ans);
-        }
-        // write the ans
-        regs[rdhi] = (ans >> 32) & 0xffffffff;
-        regs[rdlo] = ans & 0xffffffff;
-
+        result = (uint64_t)ans;
     }
 
-    // c destroyed
+    // write the ans
+    regs[rdhi] = (result >> 32) & 0xffffffff;
+    regs[rdlo] = result & 0xffffffff;
+
+
+    // c & v destroyed?
     if(s)
     {
+        set_nz_flag_long(result);
+
+        // c & v destroyed
         cpsr = deset_bit(cpsr,C_BIT);
+        cpsr = deset_bit(cpsr,V_BIT);
+
     }
 }
 
@@ -186,9 +185,25 @@ void Cpu::arm_swap(uint32_t opcode)
 
     Access_type type = is_set(opcode,22) ? BYTE : WORD;
 
+    // swp works propely even if rm and rn are the same
+    uint32_t tmp; 
+
     // rd = [rn], [rn] = rm
-    regs[rd] = mem->read_memt(regs[rn],type);
-    mem->write_memt(regs[rn],regs[rm],type);
+    if(type == BYTE)
+    {
+        tmp = mem->read_memt(regs[rn],BYTE);
+        mem->write_memt(regs[rn],regs[rm],BYTE);
+    }
+
+    else
+    {
+        tmp = mem->read_memt(regs[rn],WORD);
+        regs[rd] = rotr(regs[rd],(regs[rn]&3)*8);
+        mem->write_memt(regs[rn],regs[rm],WORD);
+    }
+
+
+    regs[rd] = tmp;
 
     // 1s +2n +1i
     cycle_tick(4);
@@ -207,22 +222,26 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
     int rlist = opcode & 0xffff;
 
 
-    if(s)
-    {
-        printf("arm block data transfer unhandled s flag: %08x\n",regs[PC]);
-        exit(1);
-    }
 
     uint32_t addr = regs[rn];
+    uint32_t old_base = regs[rn];
     int n = 0;
 
-    for(int i = 0; i < 16; i++)
+   
+    int first = 0;
+    // do in reverse order so we can pull
+    // the first item without doing something jank
+    for(int i = 15; i >= 0; i--)
     {
         if(is_set(rlist,i))
         {
+            first = i;
             n++;
         }
     }
+
+    bool has_pc = is_set(rlist,PC);
+    n = has_pc? n+1 : n;
 
     // allways adding on address so if  we are in "down mode"
     // we need to precalc the buttom1
@@ -239,10 +258,31 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
     }
 
 
+    Cpu_mode old_mode = cpu_mode;
+    bool changed_mode = false;
+    if(s)
+    {
+
+        if(l && has_pc) // cpsr = spsr
+        {
+            if(cpu_mode < 5)  // not in user or system mode
+            {
+                cpsr = status_banked[cpu_mode];
+            }
+        }
+
+        else // no r15 or load uses different mode
+        {
+            changed_mode = true;
+            switch_mode(USER);
+        }
+    }
 
 
 
-    for(int i = 0; i < 16; i++)
+
+
+    for(int i = first; i < 16; i++)
     {
         if(!is_set(rlist,i))
         {
@@ -257,12 +297,28 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
 
         if(l) // load
         {
+            // no writeback if base
+            if(i == rn)
+            {
+                w = false;
+            }
+
             regs[i] = mem->read_memt(addr,WORD);
         }
 
         else // store
         {
-            mem->write_memt(addr,regs[i],WORD);
+            // if base is is fire entry
+            // store old base
+            if(rn == i && i == first)
+            {
+                mem->write_mem(addr,old_base,WORD);
+            }
+
+            else
+            {
+                mem->write_memt(addr,regs[i],WORD);
+            }
         }
 
         if(!p)
@@ -299,6 +355,14 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
         //n-1S +2n
         cycle_tick(n+1);
     }
+
+
+    // restore the correct mode!
+    if(changed_mode)
+    {
+        switch_mode(old_mode);
+    }
+
 }
 
 
@@ -499,15 +563,10 @@ void Cpu::arm_data_processing(uint32_t opcode)
 
         if(rm == PC)
         {
-            // pc + 12 if used as operand
-            imm += 8; 
+            // pc + 8 if used as operand
+            imm += 4; 
         }
 
-        // its ticked some more
-        if(rn == PC)
-        {
-            op1 += 4;
-        }
 
         uint32_t shift_ammount = 0;
         // shift ammount is a register
@@ -517,6 +576,17 @@ void Cpu::arm_data_processing(uint32_t opcode)
             int rs = (opcode >> 8) & 0xf;
 
             shift_ammount = regs[rs] & 0xff; 
+
+            // if a reg shift ammount is used its +12
+            if(rm == PC)
+            {
+                imm += 4; 
+            }
+
+            if(rn == PC)
+            {
+                op1 += 4;
+            }
         }
 
         else // shift ammount is an 5 bit int
@@ -525,7 +595,7 @@ void Cpu::arm_data_processing(uint32_t opcode)
         }
 
 
-        op2 = barrel_shift(type,imm,shift_ammount,shift_carry);
+        op2 = barrel_shift(type,imm,shift_ammount,shift_carry,!is_set(opcode,4));
     }
 
 
@@ -880,7 +950,7 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
         int shift_ammount = (opcode >> 7) & 0x1f;
         
         bool carry = is_set(cpsr,C_BIT);
-        offset = barrel_shift(type,imm,shift_ammount,carry);
+        offset = barrel_shift(type,imm,shift_ammount,carry,true);
     }
 
     else // immeditate

@@ -20,8 +20,39 @@ void Disass::init_thumb_disass_table()
 
     for(int i = 0; i < 256; i++)
     {
+
+        // THUMB.7: load/store with register offset
+        if(((i >> 4) & 0b1111) == 0b0101 && !is_set(i,1))
+        {
+            disass_thumb_table[i] = disass_thumb_load_store_reg;
+        }
+
+        // THUMB.12: get relative address
+        else if(((i >> 4) & 0b1111) == 0b1010)
+        {
+            disass_thumb_table[i] = disass_thumb_get_rel_addr;
+        }
+        
+        // THUMB.18: unconditional branch
+        else if(((i >> 3) & 0b11111) == 0b11100)
+        {
+            disass_thumb_table[i] = disass_thumb_branch;
+        }
+
+        //THUMB.10: load/store halfword
+        else if(((i >> 4) & 0b1111) == 0b1000)
+        {
+            disass_thumb_table[i] = disass_thumb_load_store_half;
+        }
+
+        // THUMB.8: load/store sign-extended byte/halfword
+        else if(((i >> 4) & 0b1111) == 0b0101 && is_set(i,1))
+        {
+            disass_thumb_table[i] = disass_thumb_load_store_sbh;
+        }
+
         //THUMB.14: push/pop registers
-        if(((i >> 4) & 0b1111) == 0b1011 
+        else if(((i >> 4) & 0b1111) == 0b1011 
             && ((i >> 1) & 0b11) == 0b10)
         {
             disass_thumb_table[i] = disass_thumb_push_pop;
@@ -96,6 +127,74 @@ void Disass::init_thumb_disass_table()
     }
 }
 
+
+std::string Disass::disass_thumb_load_store_reg(uint16_t opcode)
+{
+    int op = (opcode >> 10) & 0x3;
+    int ro = (opcode >> 6) & 0x7;
+    int rb = (opcode >> 3) & 0x7;
+    int rd = opcode & 0x7;
+
+    const static char *names[4] = {"str","strb","ldr","ldrb"};
+
+    std::string addr_str = fmt::format("{},[{},{}]",user_regs_names[rd],
+        user_regs_names[rb],user_regs_names[ro]);
+
+    return fmt::format("{} {}",names[op],addr_str);
+}
+
+std::string Disass::disass_thumb_get_rel_addr(uint16_t opcode)
+{
+    uint32_t offset = (opcode & 0xff) * 4;
+    int rd = (opcode >> 8) & 0x7;
+    bool pc = is_set(opcode,11);
+
+    if(pc)
+    {
+        return fmt::format("add {},pc,#0x{:x}",
+            user_regs_names[rd],offset);
+    }
+
+    else
+    {
+        return fmt::format("add {},sp,#0x{:x}",
+            user_regs_names[rd],offset);
+    }
+}
+
+std::string Disass::disass_thumb_branch(uint16_t opcode)
+{
+    int offset = sign_extend((opcode & 0x7ff) * 2,12);
+    return fmt::format("b #0x{:08x}",pc+2+offset);
+}
+
+std::string Disass::disass_thumb_load_store_half(uint16_t opcode)
+{
+    int nn = ((opcode >> 6) & 0x1f) * 2;
+    int rb = (opcode >> 3) & 0x7;
+    int rd = opcode & 0x7;
+
+    std::string instr = is_set(opcode,11) ? "ldrh" : "strh";
+
+    return fmt::format("{} {}, [{} #0x{:x}]",instr,user_regs_names[rd],
+        user_regs_names[rb],nn);    
+}
+
+std::string Disass::disass_thumb_load_store_sbh(uint16_t opcode)
+{
+    int ro = (opcode >> 6) & 0x7;
+    int rb = (opcode >> 3) & 0x7;
+    int rd = opcode & 0x7;
+
+    const static char *names[4] = {"strh","ldsb","ldrh","ldsh"};
+
+    std::string addr_str = fmt::format("{},[{},{}]",user_regs_names[rd],
+        user_regs_names[rb],user_regs_names[ro]);
+
+    int op = (opcode >> 10) & 0x3;
+
+    return fmt::format("{} {}",names[op],addr_str);
+}
 
 std::string Disass::disass_thumb_ldst_imm(uint16_t opcode)
 {

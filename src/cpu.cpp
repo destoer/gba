@@ -35,8 +35,40 @@ void Cpu::init_thumb_opcode_table()
     for(int i = 0; i < 256; i++)
     {
 
+        // THUMB.8: load/store sign-extended byte/halfword
+        if(((i >> 4) & 0b1111) == 0b0101 && is_set(i,1))
+        {
+            thumb_opcode_table[i] = thumb_load_store_sbh;
+        }
+
+
+        // THUMB.7: load/store with register offset
+        else if(((i >> 4) & 0b1111) == 0b0101 && !is_set(i,1))
+        {
+           thumb_opcode_table[i] = thumb_load_store_reg;
+        }
+
+        // THUMB.12: get relative address
+        else if(((i >> 4) & 0b1111) == 0b1010)
+        {
+            thumb_opcode_table[i] = thumb_get_rel_addr;
+        }
+        
+
+        // THUMB.18: unconditional branch
+        else if(((i >> 3) & 0b11111) == 0b11100)
+        {
+            thumb_opcode_table[i] = thumb_branch;
+        }
+
+        //THUMB.10: load/store halfword
+        else if(((i >> 4) & 0b1111) == 0b1000)
+        {
+            thumb_opcode_table[i] = thumb_load_store_half;
+        }
+
         //THUMB.14: push/pop registers
-        if(((i >> 4) & 0b1111) == 0b1011 
+        else if(((i >> 4) & 0b1111) == 0b1011 
             && ((i >> 1) & 0b11) == 0b10)
         {
             thumb_opcode_table[i] = thumb_push_pop;
@@ -141,7 +173,7 @@ void Cpu::init_arm_opcode_table()
 
 
                 // Single Data Swap (SWP)  
-                else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b11111) == 0b00010)
+                else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b11111) == 0b00010 && ((i >> 4) & 0b11) == 0b00)
                 {
                     arm_opcode_table[i] = arm_swap;
                 }
@@ -327,29 +359,13 @@ void Cpu::print_regs()
 // set zero flag based on arg
 void Cpu::set_zero_flag(uint32_t v)
 {
-    if(!v) // if zero set the flag else deset
-    {
-        cpsr = set_bit(cpsr,Z_BIT);
-    }
-
-    else 
-    {
-        cpsr = deset_bit(cpsr,Z_BIT);
-    }    
+    cpsr = v == 0? set_bit(cpsr,Z_BIT) : deset_bit(cpsr,Z_BIT); 
 }
 
 
 void Cpu::set_negative_flag(uint32_t v)
 {
-    if(is_set(v,31)) // is negative when signed
-    {
-        cpsr = set_bit(cpsr,N_BIT);
-    }
-
-    else
-    {
-        cpsr = deset_bit(cpsr,N_BIT);
-    }    
+    cpsr = is_set(v,31)? set_bit(cpsr,N_BIT) : deset_bit(cpsr,N_BIT);
 }
 
 
@@ -367,29 +383,13 @@ void Cpu::set_nz_flag(uint32_t v)
 // set zero flag based on arg
 void Cpu::set_zero_flag_long(uint64_t v)
 {
-    if(!v) // if zero set the flag else deset
-    {
-        cpsr = set_bit(cpsr,Z_BIT);
-    }
-
-    else 
-    {
-        cpsr = deset_bit(cpsr,Z_BIT);
-    }    
+    cpsr = v == 0? set_bit(cpsr,Z_BIT) : deset_bit(cpsr,Z_BIT); 
 }
 
 
 void Cpu::set_negative_flag_long(uint64_t v)
 {
-    if(is_set(v,63)) // is negative when signed
-    {
-        cpsr = set_bit(cpsr,N_BIT);
-    }
-
-    else
-    {
-        cpsr = deset_bit(cpsr,N_BIT);
-    }    
+    cpsr = is_set(v,63)? set_bit(cpsr,N_BIT) : deset_bit(cpsr,N_BIT);   
 }
 
 
@@ -451,9 +451,13 @@ void Cpu::load_registers(Cpu_mode mode)
             // load first 13 user regs back to reg
             memcpy(regs,user_regs,sizeof(uint32_t)*13);
 
+
+            regs[PC] = user_regs[PC]; // may be overkill
+
             // load hi regs
             regs[SP] = hi_banked[mode][0];
             regs[LR] = hi_banked[mode][1];
+
 
             break;          
         }
@@ -505,6 +509,7 @@ void Cpu::store_registers(Cpu_mode mode)
         {
             // write back first 13 regs to user
             memcpy(user_regs,regs,sizeof(uint32_t)*13);
+            user_regs[PC] = regs[PC]; // may be overkill
 
             // store hi regs
             hi_banked[mode][0] = regs[SP];
@@ -587,27 +592,40 @@ bool Cpu::cond_met(int opcode)
 // common arithmetic and logical operations
 
 
-// v flag needs impl
+/*
+// tests for overflow this happens
+// when the sign bit changes when it shouldunt
+
+// causes second test to not show when calc is done
+// 2nd operand must be inverted for sub :P
+bool did_overflow(uint32_t v1, uint32_t v2, uint32_t ans)
+{
+    return  is_set((v1 ^ ans) & (v2 ^ ans),31); 
+}
+^ old code now replaced with compilier builtins
+*/
 
 uint32_t Cpu::add(uint32_t v1, uint32_t v2, bool s)
 {
-    uint32_t ans = v1 + v2;
+    int32_t ans;
     if(s)
     {
         // how to set this shit?
         // happens when a change of sign occurs (so bit 31)
         /// changes to somethign it shouldunt
-        //bool set_v = v1 > INT_MAX - v2 || v1 < INT_MIN - v2; 
-
-        cpsr = ans < v1? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
-        //cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT); 
+        bool set_v = __builtin_add_overflow((int32_t)v1,(int32_t)v2,&ans);
+        cpsr = ((uint32_t)ans < v1)? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
+        cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT); 
 
         set_nz_flag(ans);
-
-        return ans;
     }
 
-    return ans;
+    else
+    {
+        ans = v1 + v2;
+    }
+
+    return (uint32_t)ans;
 }
 
 
@@ -617,38 +635,44 @@ uint32_t Cpu::adc(uint32_t v1, uint32_t v2, bool s)
 
     uint32_t v3 = is_set(cpsr,C_BIT);
 
-    uint32_t ans = v1 + v2 + v3;
+    int32_t ans;
     if(s)
     {
-        // how to set this shit?
-        
-        //bool set_v = 
-
-        cpsr = ans < (v1+v3)? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
-        //cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT); 
+        bool set_v = __builtin_add_overflow((int32_t)v1,(int32_t)v2,&ans);
+        set_v ^= __builtin_add_overflow((int32_t)ans,(int32_t)v3,&ans);
+        cpsr = (uint32_t)ans < (v1+v3)? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT); 
+        cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT); 
 
         set_nz_flag(ans);
-
-        return ans;
     }
 
-    return ans;
+    else
+    {
+        ans = v1 + v2 + v3;
+    }
+
+    return (uint32_t)ans;
 }
 
 
 uint32_t Cpu::sub(uint32_t v1, uint32_t v2, bool s)
 {
-    uint32_t ans = v1 - v2;
+    int32_t ans;
     if(s)
     {
-        //bool set_v = 
+        bool set_v = __builtin_sub_overflow((int32_t)v1,(int32_t)v2,&ans);
         cpsr = (v1 >= v2)? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
-        //cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
+        cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
 
 
         set_nz_flag(ans);
     }
-    return ans;
+
+    else
+    {
+        ans = v1 - v2;
+    }
+    return (uint32_t)ans;
 }
 
 // nneds double checking
@@ -657,17 +681,24 @@ uint32_t Cpu::sbc(uint32_t v1, uint32_t v2, bool s)
     // subtract one from ans if carry is not set
     uint32_t v3 = is_set(cpsr,C_BIT)? 0 : 1;
 
-    uint32_t ans = v1 - v2 - v3;
+    int32_t ans;
     if(s)
     {
-        //bool set_v = 
+        bool set_v = __builtin_sub_overflow((int32_t)v1,(int32_t)v2,&ans);
+        set_v ^= __builtin_sub_overflow((int32_t)ans,(int32_t)v3,&ans);
         cpsr = (v1 >= (v2+v3))? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
-        //cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
+        cpsr = set_v? set_bit(cpsr,V_BIT) : deset_bit(cpsr,V_BIT);
 
 
         set_nz_flag(ans);
     }
-    return ans;
+
+    else
+    {
+        return v1 - v2 - v3;
+    }
+
+    return (uint32_t)ans;
 }
 
 uint32_t Cpu::logical_and(uint32_t v1, uint32_t v2, bool s)

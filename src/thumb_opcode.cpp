@@ -36,6 +36,24 @@ void Cpu::thumb_unknown(uint16_t opcode)
     exit(1);
 }
 
+void Cpu::thumb_get_rel_addr(uint16_t opcode)
+{
+    uint32_t offset = (opcode & 0xff) * 4;
+    int rd = (opcode >> 8) & 0x7;
+    bool pc = is_set(opcode,11);
+
+    if(pc)
+    {
+        regs[rd] = ((regs[PC]+2) & ~2) + offset;
+    }
+
+    else
+    {
+        regs[rd] = regs[SP] + offset;
+    }
+    cycle_tick(1); // 1 s cycle
+}
+
 void Cpu::execute_thumb_opcode(uint16_t instr)
 {
     // get the bits that determine the kind of instr it is
@@ -45,6 +63,119 @@ void Cpu::execute_thumb_opcode(uint16_t instr)
     std::invoke(thumb_opcode_table[op],this,instr);    
 }
 
+void Cpu::thumb_load_store_sbh(uint16_t opcode)
+{
+    int ro = (opcode >> 6) & 0x7;
+    int rb = (opcode >> 3) & 0x7;
+    int rd = opcode & 0x7;
+    int op = (opcode >> 10) & 0x3;
+
+    uint32_t addr = regs[rb] + regs[ro];
+
+    switch(op)
+    {
+        case 0: // strh
+        {
+            mem->write_memt(addr,regs[rd],HALF);
+            cycle_tick(2); // 2n for str
+            break;
+        }
+
+        case 1: // ldsb
+        {
+            regs[rd] = sign_extend(mem->read_memt(addr,BYTE),8);
+            cycle_tick(3); // 1s + 1n + 1i
+            break;
+        }
+
+        case 2: // ldrh
+        {
+            regs[rd] = mem->read_memt(addr,HALF);
+            cycle_tick(3); // 1s + 1n + 1i
+            break;
+        }
+
+        case 3: //ldsh
+        {
+            regs[rd] = sign_extend(mem->read_memt(addr,HALF),16);
+            cycle_tick(3); // 1s + 1n + 1i
+            break;
+        }        
+    }
+}
+
+void Cpu::thumb_load_store_reg(uint16_t opcode)
+{
+    int op = (opcode >> 10) & 0x3;
+    int ro = (opcode >> 6) & 0x7;
+    int rb = (opcode >> 3) & 0x7;
+    int rd = opcode & 0x7;
+
+
+    uint32_t addr = regs[rb] + regs[ro];
+
+    switch(op)
+    {
+        case 0: // str
+        {
+            mem->write_memt(addr,regs[rd],WORD);
+            cycle_tick(2); // 2n for str
+            break;
+        }
+
+        case 1: //strb
+        {
+            mem->write_memt(addr,regs[rd],BYTE);
+            cycle_tick(2); // 2n for str
+            break;
+        }
+
+        case 2: // ldr
+        {
+            regs[rd] = mem->read_memt(addr,WORD);
+            cycle_tick(3); // 1s + 1n + 1i for ldr
+            break;
+        }
+
+        case 3: // ldrb
+        {
+            regs[rd] = mem->read_memt(addr,BYTE);
+            cycle_tick(3); // 1s + 1n + 1i for ldr
+            break;
+        }
+    }
+
+}
+
+void Cpu::thumb_branch(uint16_t opcode)
+{
+    int offset = (opcode & 0x7ff)*2;
+    offset = sign_extend(offset,12);
+    regs[PC] += offset+2;
+
+    cycle_tick(3); // 2s +1n 
+}
+
+void Cpu::thumb_load_store_half(uint16_t opcode)
+{
+    int nn = ((opcode >> 6) & 0x1f) * 2;
+    int rb = (opcode >> 3) & 0x7;
+    int rd = opcode & 0x7;
+
+    bool load = is_set(opcode,11);
+
+    if(load)
+    {
+        regs[rd] = mem->read_memt(regs[rb]+nn,HALF);
+        cycle_tick(3); //1s +1n + 1i
+    }   
+
+    else
+    {
+        mem->write_memt(regs[rb]+nn,regs[rd],HALF);
+        cycle_tick(2); // 2n for str
+    } 
+}
 
 void Cpu::thumb_push_pop(uint16_t opcode)
 {
@@ -207,6 +338,31 @@ void Cpu::thumb_alu(uint16_t opcode)
     switch(op)
     {
 
+        case 0x0: // and
+        {
+            regs[rd] = logical_and(regs[rd],regs[rs],true);
+            cycle_tick(1); // 1 s cycle
+            break;
+        }
+
+        case 0x1: // eor
+        {
+            regs[rd] ^= regs[rs];
+            set_nz_flag(regs[rd]);
+            cycle_tick(1); // 1 s cycle
+            break;
+        }
+
+        case 0x2: // lsl
+        {
+            bool c = is_set(cpsr,C_BIT);
+            regs[rd] = barrel_shift(LSL,regs[rd],regs[rs]&0xff,c,false);
+            set_nz_flag(regs[rd]);
+            cpsr = c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            cycle_tick(2); // 1s + 1i
+            break;
+        }
+
         case 0xe: // bic
         {
             regs[rd] &= ~regs[rs];
@@ -215,9 +371,58 @@ void Cpu::thumb_alu(uint16_t opcode)
             break;
         }
 
+
+        case 0x7: // ror
+        {
+            bool c = is_set(cpsr,C_BIT);
+            regs[rd] = barrel_shift(ROR,regs[rd],regs[rs]&0xff,c,false);
+            set_nz_flag(regs[rd]);
+            cpsr = c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            cycle_tick(2); // 1s + 1i
+            break;
+        }
+
+        case 0x8: // tst
+        {
+            logical_and(regs[rd],regs[rs],true);
+            cycle_tick(1); // 1 s cycle
+            break;
+        }
+
+        case 0x9: // neg
+        {
+            regs[rd] = sub(0,regs[rs],true);
+            cycle_tick(1); // 1 s cycle
+            break;
+        }
+
         case 0xa: // cmp
         {
             sub(regs[rs],regs[rs],true);
+            break;
+        }
+
+        case 0xc: // orr
+        {
+            regs[rd] = logical_or(regs[rd],regs[rs],true);
+            cycle_tick(1); // 1 s cycle
+            break;
+        }
+
+        case 0xd: // mul
+        {
+            regs[rd] *= regs[rs];
+            set_nz_flag(regs[rd]);
+            cpsr = deset_bit(cpsr,C_BIT);
+            cycle_tick(1); // needs timing fix
+            break;
+        }
+
+        case 0xf: // mvn
+        {
+            regs[rd] = ~regs[rs];
+            set_nz_flag(regs[rd]);                  
+            cycle_tick(1); // 1 s cycle
             break;
         }
 
@@ -397,7 +602,7 @@ void Cpu::thumb_mov_reg_shift(uint16_t opcode)
 
     bool did_carry = is_set(cpsr,C_BIT);
 
-    regs[rd] = barrel_shift(type,regs[rs],n,did_carry);
+    regs[rd] = barrel_shift(type,regs[rs],n,did_carry,true);
 
     set_nz_flag(regs[rd]);
 

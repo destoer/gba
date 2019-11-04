@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iterator>
 #include <functional>
+#include <numeric>
 #include <stdint.h>
 #include <assert.h>
 #include <stdio.h>
@@ -16,18 +17,18 @@
 #define UNUSED(X) ((void)X)
 void read_file(std::string filename, std::vector<uint8_t> &buf);
 
-inline bool is_set(int reg, int bit)
+inline bool is_set(uint64_t reg, int bit)
 {
 	return ((reg >> bit) & 1);
 }
 
-inline uint32_t set_bit(uint32_t v,int bit)
+inline uint64_t set_bit(uint64_t v,int bit)
 {
     return (v |= (1 << bit));
 }
 
 
-inline uint32_t deset_bit(uint32_t v,int bit)
+inline uint64_t deset_bit(uint64_t v,int bit)
 {
     return (v &= ~(1 << bit));
 }
@@ -50,7 +51,7 @@ inline uint32_t rotr(uint32_t n, unsigned int c)
 }
 
  // https://stackoverflow.com/questions/5814072/sign-extend-a-nine-bit-number-in-c
-inline int sign_extend(int x, int b)
+inline int64_t sign_extend(int64_t x, int64_t b)
 {
     /* generate the sign bit mask. 'b' is the extracted number of bits */
     int m = 1U << (b - 1);  

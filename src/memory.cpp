@@ -108,7 +108,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
 
 //access handler for reads (for non io mapped mem)
 // need checks for endianess here for completeness
-inline uint32_t Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mode)
+uint32_t Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mode)
 {
     switch(mode)
     {
@@ -432,21 +432,21 @@ void Mem::write_external(uint32_t addr,uint32_t v,Access_type mode)
         case 0x9:
         {
             mem_region = ROM;
-            break;
+            return;
         }
 
         case 0xa: // wait state 1
         case 0xb:
         {
             mem_region = ROM;
-            break;
+            return;
         }
             
         case 0xc: // wait state 2
         case 0xd:
         {
             mem_region = ROM;
-            break;
+            return;
         }
 
         case 0xe: // sram
@@ -454,7 +454,7 @@ void Mem::write_external(uint32_t addr,uint32_t v,Access_type mode)
             if(addr <= 0x0e00ffff)
             {
                 mem_region = SRAM;
-                puts("sram write");
+                printf("sram write %08x:%08x\n",cpu->get_pc(),addr);
                 exit(1);
             }
                 
@@ -471,7 +471,7 @@ void Mem::write_external(uint32_t addr,uint32_t v,Access_type mode)
 
 //access handler for reads (for non io mapped mem)
 // need checks for endianess here for completeness
-inline void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access_type mode)
+void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access_type mode)
 {
     switch(mode)
     {

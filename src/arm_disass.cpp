@@ -32,7 +32,7 @@ void Disass::init_arm_disass_table()
                 }
 
                 // Single Data Swap (SWP)  
-                else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b11111) == 0b00010)
+                 else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b11111) == 0b00010 && ((i >> 4) & 0b11) == 0b00)
                 {
                     disass_arm_table[i] = disass_arm_swap;
                 }
@@ -139,6 +139,7 @@ std::string Disass::disass_arm_get_cond_suffix(int opcode)
     return std::string(suf_array[cond_bits]);
 }
 
+/* TODO */
 std::string Disass::disass_arm_mull(uint32_t opcode)
 {
     UNUSED(opcode); return "MULL UNDEFINED";
@@ -352,7 +353,6 @@ std::string Disass::disass_arm_get_shift_string(uint32_t opcode)
 
     else // shift type on 5 bit immediate
     {
-        puts("shift imm");
         int imm = (opcode >> 7) & 0x1f;
         // egr1, asr #0x2
 

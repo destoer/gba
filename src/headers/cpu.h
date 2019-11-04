@@ -17,6 +17,8 @@ public:
 
     uint32_t get_mode() const { return cpu_mode; }
 
+    int get_cycles() const { return cyc_cnt; }
+
     bool is_cpu_thumb() const { return is_thumb; }
 
     // print all registers for debugging
@@ -74,6 +76,11 @@ private:
     void thumb_hi_reg_ops(uint16_t opcode);
     void thumb_ldst_imm(uint16_t opcode);
     void thumb_push_pop(uint16_t opcode);
+    void thumb_load_store_half(uint16_t opcode);
+    void thumb_branch(uint16_t opcode);
+    void thumb_get_rel_addr(uint16_t opcode);
+    void thumb_load_store_reg(uint16_t opcode);
+    void thumb_load_store_sbh(uint16_t opcode);
 
     // cpu operations eg adds
     uint32_t add(uint32_t v1, uint32_t v2, bool s);
@@ -134,4 +141,7 @@ private:
 
     // cpu pipeline
     uint32_t pipeline[2] = {0};
+
+
+    int cyc_cnt;
 };

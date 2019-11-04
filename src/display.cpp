@@ -12,6 +12,21 @@ void Display::advance_line()
 {
     ly++;
     mem->io[IO_VCOUNT&IO_MASK] = ly; 
+
+    uint8_t lyc = mem->io[(IO_DISPSTAT+1)&IO_MASK];
+
+    // need to fire an interrupt here if enabled
+    if(ly == lyc)
+    {
+        // set the v counter flag
+        set_bit(mem->io[IO_DISPSTAT&IO_MASK],2);
+    }
+
+    else
+    {
+        deset_bit(mem->io[IO_DISPSTAT&IO_MASK],2);
+    }
+
 }
 
 
