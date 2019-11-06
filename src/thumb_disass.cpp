@@ -147,7 +147,7 @@ std::string Disass::disass_thumb_get_rel_addr(uint16_t opcode)
 {
     uint32_t offset = (opcode & 0xff) * 4;
     int rd = (opcode >> 8) & 0x7;
-    bool pc = is_set(opcode,11);
+    bool pc = !is_set(opcode,11);
 
     if(pc)
     {

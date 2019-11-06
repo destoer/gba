@@ -40,7 +40,7 @@ void Cpu::thumb_get_rel_addr(uint16_t opcode)
 {
     uint32_t offset = (opcode & 0xff) * 4;
     int rd = (opcode >> 8) & 0x7;
-    bool pc = is_set(opcode,11);
+    bool pc = !is_set(opcode,11);
 
     if(pc)
     {
@@ -133,6 +133,7 @@ void Cpu::thumb_load_store_reg(uint16_t opcode)
         case 2: // ldr
         {
             regs[rd] = mem->read_memt(addr,WORD);
+            regs[rd] = rotr(regs[rd],(addr&3)*8);
             cycle_tick(3); // 1s + 1n + 1i for ldr
             break;
         }
@@ -294,7 +295,7 @@ void Cpu::thumb_hi_reg_ops(uint16_t opcode)
     {
         case 0b00: // add
         {
-            regs[rd] += rs_val;
+            regs[rd] = add(regs[rd],rs_val,false);
             break;  
         }
 
@@ -398,7 +399,7 @@ void Cpu::thumb_alu(uint16_t opcode)
 
         case 0xa: // cmp
         {
-            sub(regs[rs],regs[rs],true);
+            sub(regs[rd],regs[rs],true);
             break;
         }
 
@@ -504,7 +505,9 @@ void Cpu::thumb_ldst_imm(uint16_t opcode)
 
         case 0b01: // ldr
         {
-            regs[rd] = mem->read_memt((regs[rb]+imm*4),WORD);
+            uint32_t addr = regs[rb]+imm*4;
+            regs[rd] = mem->read_memt(addr,WORD);
+            regs[rd] = rotr(regs[rd],(addr&3)*8);
             cycle_tick(3);
             break;            
         }
@@ -670,7 +673,6 @@ void Cpu::thumb_cond_branch(uint16_t opcode)
     int8_t offset = opcode & 0xff;
     uint32_t addr = (regs[PC]+2) + offset*2;
     int cond = (opcode >> 8) & 0xf;
-
 
     // if branch taken 2s +1n cycles
     if(cond_met(cond))
