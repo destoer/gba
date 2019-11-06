@@ -34,7 +34,7 @@ public:
     // display memory
 
     // bg/obj pallette ram
-    std::vector<uint8_t> bg_ram; // 0x400
+    std::vector<uint8_t> pal_ram; // 0x400
 
     // object attribute map
     std::vector<uint8_t> oam; // 0x400 
@@ -53,7 +53,7 @@ private:
     uint32_t read_chip_wram(uint32_t addr,Access_type type);
     uint32_t read_io(uint32_t addr,Access_type type);
     uint8_t read_io_regs(uint32_t addr);
-    uint32_t read_obj_ram(uint32_t addr,Access_type type);
+    uint32_t read_pal_ram(uint32_t addr,Access_type type);
     uint32_t read_vram(uint32_t addr,Access_type type);
     uint32_t read_oam(uint32_t addr,Access_type type);
     uint32_t read_external(uint32_t addr,Access_type type);
@@ -63,7 +63,7 @@ private:
     void write_chip_wram(uint32_t addr,uint32_t v,Access_type mode);
     void write_io(uint32_t addr,uint32_t v,Access_type mode);
     void write_io_regs(uint32_t addr,uint8_t v);
-    void write_obj_ram(uint32_t addr,uint32_t v,Access_type mode);
+    void write_pal_ram(uint32_t addr,uint32_t v,Access_type mode);
     void write_vram(uint32_t addr,uint32_t v,Access_type mode);
     void write_oam(uint32_t addr,uint32_t v,Access_type mode);
     void write_external(uint32_t addr,uint32_t v,Access_type mode);
@@ -72,7 +72,7 @@ private:
     enum Memory_region
     {
         BIOS = 0,WRAM_BOARD,WRAM_CHIP,
-        IO,BG,VRAM,OAM,ROM,FLASH,SRAM,
+        IO,PAL,VRAM,OAM,ROM,FLASH,SRAM,
         UNDEFINED
     };
 
@@ -134,4 +134,6 @@ constexpr int IO_BG0CNT = 0x04000008 & IO_MASK;
 constexpr int IO_BG1CNT = 0x0400000a & IO_MASK;
 constexpr int IO_BG2CNT = 0x0400000c & IO_MASK;
 constexpr int IO_BG3CNT = 0x0400000e & IO_MASK;
+constexpr int IO_BG0HOFS = 0x04000010 & IO_MASK; // scroll x for bg0
+constexpr int IO_BG0VOFS = 0x04000012 & IO_MASK; // scroll y for bg0
 constexpr int IO_KEYINPUT = 0x04000130 & IO_MASK;

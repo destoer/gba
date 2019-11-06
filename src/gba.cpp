@@ -115,6 +115,7 @@ void GBA::init_screen()
 	memset(disp.screen ,0x00,disp.Y * disp.X *  4 * sizeof(uint8_t));	
 }
 
+
 void GBA::handle_input()
 {
 	SDL_Event event;

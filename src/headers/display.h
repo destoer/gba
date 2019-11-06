@@ -33,3 +33,15 @@ private:
     Mem *mem;
     Display_mode mode = VISIBLE;
 };
+
+
+inline uint32_t convert_color(uint16_t color)
+{
+    int r = color & 0x1f;
+    int g = (color >> 5) & 0x1f;
+    int b = (color >> 10) & 0x1f;
+
+
+
+    return r << 19 |  g << 11 | b << 3 | 0xFF000000;
+}

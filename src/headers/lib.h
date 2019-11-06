@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <SDL2/SDL.h>
 #include "../fmt/format.h"
 
 #define UNUSED(X) ((void)X)

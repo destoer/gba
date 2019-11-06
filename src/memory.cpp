@@ -20,7 +20,7 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu,Display *disp)
     board_wram.resize(0x40000);
     chip_wram.resize(0x8000);
     io.resize(0x400);
-    bg_ram.resize(0x400);
+    pal_ram.resize(0x400);
     vram.resize(0x18000);
     oam.resize(0x400); 
     
@@ -292,11 +292,11 @@ uint32_t Mem::read_vram(uint32_t addr,Access_type mode)
 
 }
 
-uint32_t Mem::read_obj_ram(uint32_t addr,Access_type mode)
+uint32_t Mem::read_pal_ram(uint32_t addr,Access_type mode)
 {
-    mem_region = BG;
-    //return bg_ram[addr & 0x3ff];
-    return handle_read(bg_ram,addr&0x3ff,mode);
+    mem_region = PAL;
+    //return pal_ram[addr & 0x3ff];
+    return handle_read(pal_ram,addr&0x3ff,mode);
 
 }
 
@@ -362,7 +362,7 @@ uint32_t Mem::read_mem(uint32_t addr,Access_type mode)
     else if(addr < 0x03000000) v = read_board_wram(addr,mode);
     else if(addr < 0x04000000) v = read_chip_wram(addr,mode);
     else if(addr < 0x05000000) v = read_io(addr,mode);
-    else if(addr < 0x06000000) v = read_obj_ram(addr,mode);
+    else if(addr < 0x06000000) v = read_pal_ram(addr,mode);
     else if(addr < 0x06018000) v = read_vram(addr,mode);
     else if(addr < 0x07000000) { mem_region = UNDEFINED; return 0; }
     else if(addr < 0x08000000) v = read_oam(addr,mode);
@@ -416,7 +416,7 @@ void Mem::write_mem(uint32_t addr,uint32_t v,Access_type mode)
     else if(addr < 0x03000000) write_board_wram(addr,v,mode);
     else if(addr < 0x04000000) write_chip_wram(addr,v,mode);
     else if(addr < 0x05000000) write_io(addr,v,mode);
-    else if(addr < 0x06000000) write_obj_ram(addr,v,mode);
+    else if(addr < 0x06000000) write_pal_ram(addr,v,mode);
     else if(addr < 0x06018000) write_vram(addr,v,mode);
     else if(addr < 0x07000000) { mem_region = UNDEFINED; return; }
     else if(addr < 0x08000000) write_oam(addr,v,mode);
@@ -608,6 +608,33 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             break;
         }
 
+        case IO_BG0HOFS: // write only
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // only 1st bit used
+        case IO_BG0HOFS+1:
+        {
+            io[addr] = v & 1;
+            break;
+        }
+
+
+        case IO_BG0VOFS: // write only
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // only 1st bit used
+        case IO_BG0VOFS+1:
+        {
+            io[addr] = v & 1;
+            break;
+        }
+
 
         case IO_IME: // 0th bit toggles ime
         {
@@ -686,11 +713,11 @@ void Mem::write_vram(uint32_t addr,uint32_t v,Access_type mode)
     handle_write(vram,addr-0x06000000,v,mode); 
 }
 
-void Mem::write_obj_ram(uint32_t addr,uint32_t v,Access_type mode)
+void Mem::write_pal_ram(uint32_t addr,uint32_t v,Access_type mode)
 {
-    mem_region = BG;
-    //bg_ram[addr & 0x3ff] = v;
-    handle_write(bg_ram,addr&0x3ff,v,mode);
+    mem_region = PAL;
+    //pal_ram[addr & 0x3ff] = v;
+    handle_write(pal_ram,addr&0x3ff,v,mode);
 }
 
 void Mem::write_board_wram(uint32_t addr,uint32_t v,Access_type mode)

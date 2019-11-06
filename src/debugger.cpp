@@ -3,6 +3,8 @@
 #include "headers/memory.h"
 #include "headers/cpu.h"
 #include "headers/disass.h"
+#include "headers/display.h"
+#include "headers/lib.h"
 #include <sstream>
 #include <exception>
 
@@ -16,6 +18,74 @@ void Debugger::init(Mem *mem, Cpu *cpu, Display *disp, Disass *disass)
 }
 
 
+void Debugger::palette_viewer(std::vector<std::string> command)
+{
+
+    UNUSED(command);
+
+	/* sdl setup */
+	
+	// initialize our window
+	pal_window = SDL_CreateWindow("Palette viewer",
+		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,PAL_X*30,PAL_Y*20,SDL_WINDOW_RESIZABLE);
+	
+	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl"); // crashes without this on windows?
+	
+	// set a render for our window
+	pal_renderer = SDL_CreateRenderer(pal_window, -1, SDL_RENDERER_ACCELERATED);
+
+	pal_texture = SDL_CreateTexture(pal_renderer,SDL_PIXELFORMAT_RGB888, 
+        SDL_TEXTUREACCESS_STATIC, PAL_X, PAL_Y);	
+
+
+
+
+
+    for(int i = 0; i < 256; i++)
+    {
+        pal_screen[i] = convert_color(mem->handle_read(mem->pal_ram,i*2,HALF));
+    }
+
+    // do our screen blit
+	SDL_UpdateTexture(pal_texture, NULL, pal_screen,  4 * PAL_X);
+	SDL_RenderCopy(pal_renderer, pal_texture, NULL, NULL);
+	SDL_RenderPresent(pal_renderer);
+
+
+
+
+    SDL_Event event;
+
+    bool quit = false;
+
+    while(!quit)
+    {
+        // handle input
+        while(SDL_PollEvent(&event))
+        {	
+            switch(event.type) 
+            {
+                case SDL_WINDOWEVENT:
+                {
+                    if(event.window.event == SDL_WINDOWEVENT_RESIZED)
+                    {
+                        SDL_SetWindowSize(pal_window,event.window.data1, event.window.data2);
+                    }
+
+                    else if(event.window.event == SDL_WINDOWEVENT_CLOSE)
+                    {
+                        SDL_DestroyRenderer(pal_renderer);
+                        SDL_DestroyWindow(pal_window); 
+                        return;                       
+                    }
+                    break;
+                }
+            }
+        }
+        SDL_Delay(100);
+    }
+
+}
 
 
 // main debugger input
@@ -25,8 +95,8 @@ void Debugger::enter_debugger()
     step_instr = false;
 
     // need a write and exec command (then look into handling all the instruction variants)
-    static const std::vector<std::string> commands{"run","break","clear","step","info","disass","write","exec"};
-    static const std::vector<DEBUGGER_FPTR> command_funcs{run,breakpoint,clear,step,info,disass_addr,write,exec};
+    static const std::vector<std::string> commands{"run","break","clear","step","info","disass","write","exec","pal_viewer"};
+    static const std::vector<DEBUGGER_FPTR> command_funcs{run,breakpoint,clear,step,info,disass_addr,write,exec,palette_viewer};
     std::string input;
 
     while(!debug_quit)

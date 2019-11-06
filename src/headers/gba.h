@@ -4,7 +4,7 @@
 #include "disass.h"
 #include "display.h"
 #include "debugger.h"
-#include <SDL2/SDL.h>
+
 
 class GBA
 {
