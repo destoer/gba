@@ -54,35 +54,54 @@ void Display::render()
             uint16_t bg0_cnt = mem->handle_read(mem->io,IO_BG0CNT,HALF);
             uint32_t bg_tile_data_base = ((bg0_cnt >> 2) & 0x3) * 0x4000;
             uint32_t bg_map_base =  ((bg0_cnt >> 8) & 0x1f) * 0x800;
+            constexpr uint32_t size_table_x[4] = {256,512,256,512};
+            uint32_t size = (bg0_cnt >> 14) & 0x3; 
 
+            uint32_t x_size = size_table_x[size];
 
             // 256 color one pal 8bpp? or 16 color 16 pal 4bpp 
             //bool col_256 = is_set(bg0_cnt,7); // 4bpp assumed
         
+            //uint32_t scroll_x = mem->handle_read(mem->io,IO_BG0HOFS,HALF);
+            //uint32_t scroll_y = mem->handle_read(mem->io,IO_BG0VOFS,HALF);
 
-            // lets just try and outright dump the first 30  tiles
-            for(int i = 0; i < 30; i++)
+            
+
+
+
+            for(int y = 0; y < Y; y++)
             {
-                // rip the background entry and pull the tile and palette number
-                uint16_t bg_entry = mem->handle_read(mem->vram,bg_map_base + (i * 2),HALF);
-                uint32_t tile_num = bg_entry & 0x3ff;
-                uint32_t pal_num = (bg_entry >> 12) & 0x1f;
-
-                // now we will rip the tile and blit it at the first space
-                uint32_t tile_addr = bg_tile_data_base+(tile_num*0x20); 
-
-
-                //printf("%x,%x,%x,%x:%x\n",pal_num,bg_tile_data_base,bg_map_base + (i * 2),tile_addr,tile_num);
-
-
-                //printf("tile number %d\n",tile_num);
-                for(int y = 0; y < 8; y++) 
+                for(int x = 0; x < X; x += 8)
                 {
-                    for(int x = 0; x < 8; x += 2)
-                    {
+                    
 
+                    // 8 for each map but each map takes 2 bytes
+                    uint32_t bg_map_offset = (x / 4) + ((y / 8) * (x_size / 8));
+
+                    uint16_t bg_map_entry = mem->handle_read(mem->vram,bg_map_base+bg_map_offset,HALF);
+                    
+
+                    bool x_flip = is_set(bg_map_entry,10);
+                    bool y_flip = is_set(bg_map_entry,11);
+
+                    uint32_t tile_number = bg_map_entry & 0x1ff; 
+                    uint32_t pal_num = (bg_map_entry >> 12) & 0xf;
+
+
+                    uint32_t tile_addr = bg_tile_data_base+(tile_number*0x20); 
+
+
+                    uint32_t tile_y = y % 8;
+                    tile_y = y_flip? 7-tile_y : tile_y;
+
+                    int x_pix = x_flip? 8 : 0;
+                    int x_step = x_flip? -2 : +2;
+
+                    for(int tile_x = 0; tile_x < 8; tile_x += 2, x_pix += x_step)
+                    {
                         // read out the color indexs from the tile
-                        uint8_t tile = mem->handle_read(mem->vram,tile_addr+((8*y)+(x/2)),BYTE);
+                        uint32_t tile_offset = ((8 * tile_y) / 2) + (x_pix / 2);
+                        uint8_t tile = mem->handle_read(mem->vram,tile_addr+tile_offset,BYTE);
                         uint32_t idx1 =  tile & 0xf;
                         uint32_t idx2 = (tile >> 4) & 0xf;
 
@@ -90,14 +109,14 @@ void Display::render()
                         uint16_t color1 = mem->handle_read(mem->pal_ram,(0x20*pal_num)+idx1*2,HALF);
                         uint16_t color2 = mem->handle_read(mem->pal_ram,(0x20*pal_num)+idx2*2,HALF);
 
+
+                        uint32_t x_cord = (x + tile_x) % X;
                         // convert and smash them to the screen
-                        screen[y][(8*i)+x] = convert_color(color1);
-                        screen[y][(8*i)+x+1] = convert_color(color2);
+                        screen[y][x_cord] = convert_color(color1);
+                        screen[y][x_cord+1] = convert_color(color2);
                     }
                 }
             }
-            
-
             break;
         }
 
