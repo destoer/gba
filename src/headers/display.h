@@ -28,6 +28,14 @@ private:
     void render();
     void advance_line();
 
+
+
+    // renderer helper functions
+    uint16_t read_palette(uint32_t pal_num,uint32_t idx);
+    void read_tile(uint32_t tile[],bool col_256,uint32_t base,uint32_t pal_num,uint32_t tile_num, 
+        uint32_t y,bool x_flip, bool y_flip);
+
+
     int cyc_cnt = 0; // current number of elapsed cycles
     int ly = 0; // current number of cycles
     Mem *mem;
