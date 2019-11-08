@@ -34,7 +34,14 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu,Display *disp)
 
 
 
+    // read and copy in the bios rom
+    read_file("GBA.BIOS",bios_rom);
 
+    if(bios_rom.size() != 0x4000)
+    {
+        puts("invalid bios size!");
+        exit(1);
+    }
 }
 
 
@@ -144,6 +151,21 @@ uint8_t Mem::read_io_regs(uint32_t addr)
     switch(addr)
     {
 
+        // should only be accessible from bios..
+        // handle this later
+        case IO_SOUNDBIAS:
+        case IO_SOUNDBIAS+1:
+        {
+            return io[addr];
+        }
+
+        // unused
+        case IO_SOUNDBIAS+2:
+        case IO_SOUNDBIAS+3:
+        {
+            return 0; 
+        }
+
         case IO_DISPCNT:
         {
             return io[addr];
@@ -228,9 +250,15 @@ uint8_t Mem::read_io_regs(uint32_t addr)
             break;
         }
 
+        case IO_POSTFLG:
+        {
+            return io[addr] & 1;
+            break;
+        }
+
         default:
         {    
-            printf("unknown io reg read at %08x\n",addr);
+            printf("unknown io reg read at %08x:%08x\n",addr,cpu->get_pc());
             exit(1);
         }
     }
@@ -475,7 +503,7 @@ void Mem::write_external(uint32_t addr,uint32_t v,Access_type mode)
             }
         }
     }
-    printf("write_external fell through %08x\n",addr);
+    printf("write_external fell through %08x:%08x\n",addr,cpu->get_pc());
     exit(1);    
 }
 
@@ -508,12 +536,22 @@ void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access
 }
 
 
+// this definitely needs to be cleaned up!
 void Mem::write_io_regs(uint32_t addr,uint8_t v)
 {
     addr &= IO_MASK;
+
+
+    // unused areas (once we have the full map)
+    // we can just make this be ignored in the default case!
+    if(addr > 0x208 && addr < 0x300)
+    {
+        return;
+    }
+
+
     switch(addr)
     {
-
 
         case IO_DISPCNT:
         {
@@ -608,7 +646,13 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             break;
         }
 
+
+        // all backgrounds function the same so we will group them
+
         case IO_BG0HOFS: // write only
+        case IO_BG1HOFS:
+        case IO_BG2HOFS:
+        case IO_BG3HOFS:
         {
             io[addr] = v;
             break;
@@ -616,6 +660,9 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
 
         // only 1st bit used
         case IO_BG0HOFS+1:
+        case IO_BG1HOFS+1:
+        case IO_BG2HOFS+1:
+        case IO_BG3HOFS+1:
         {
             io[addr] = v & 1;
             break;
@@ -623,6 +670,9 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
 
 
         case IO_BG0VOFS: // write only
+        case IO_BG1VOFS:
+        case IO_BG2VOFS:
+        case IO_BG3VOFS:
         {
             io[addr] = v;
             break;
@@ -630,8 +680,453 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
 
         // only 1st bit used
         case IO_BG0VOFS+1:
+        case IO_BG1VOFS+1:
+        case IO_BG2VOFS+1:
+        case IO_BG3VOFS+1:
         {
             io[addr] = v & 1;
+            break;
+        }
+
+
+
+
+        // both have full write
+        // bg2 scaling param X
+        case IO_BG2PA:
+        case IO_BG2PA+1:
+        case IO_BG2PB:
+        case IO_BG2PB+1:
+        case IO_BG2PC:
+        case IO_BG2PC+1:
+        case IO_BG2PD:
+        case IO_BG2PD+1:                        
+        {
+            io[addr] = v;
+            break;
+        }
+
+
+
+
+        // both have full write
+        // bg3 scaling param X
+        case IO_BG3PA:
+        case IO_BG3PA+1:
+        case IO_BG3PB:
+        case IO_BG3PB+1:
+        case IO_BG3PC:
+        case IO_BG3PC+1:
+        case IO_BG3PD:
+        case IO_BG3PD+1:                        
+        {
+            io[addr] = v;
+            break;
+        }
+
+
+
+
+        // background 2 reference point registers
+        // on write these copy to internal regs
+        case IO_BG2X_L:
+        case IO_BG2X_L+1:
+        case IO_BG2Y_L:
+        case IO_BG2Y_L+1:
+        case IO_BG2X_H:
+        case IO_BG2Y_H:                        
+        {
+            io[addr] = v;
+            disp->load_reference_point_regs();
+            break;
+        }
+
+        case IO_BG2X_H+1:
+        case IO_BG2Y_H+1:        
+        {
+            io[addr] = v & ~0xf0;
+            disp->load_reference_point_regs();
+            break;
+        }
+
+
+
+
+        //rightmost cord of window plus 1
+        case IO_WIN0H:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // leftmost window cord
+        case IO_WIN0H+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+
+        // DMA 0
+
+        // dma 0 source reg
+        case IO_DMA0SAD: 
+        case IO_DMA0SAD+1:
+        case IO_DMA0SAD+2:
+        case IO_DMA0SAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 0 dest reg
+        case IO_DMA0DAD: 
+        case IO_DMA0DAD+1:
+        case IO_DMA0DAD+2:
+        case IO_DMA0DAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 0 transfer len
+        case IO_DMA0CNT_L:
+        case IO_DMA0CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 0 transfer control
+        case IO_DMA0CNT_H:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 0 transfer control
+        case IO_DMA0CNT_H+1:
+        {
+            io[addr] = v;
+            if(is_set(v,7)) // transfer enabeld
+            {
+                puts("dma 0 transfer enabled!");
+                exit(1);
+            }
+            break;
+        }
+
+
+
+
+
+
+
+        // DMA 1
+
+        // dma 1 source reg
+        case IO_DMA1SAD: 
+        case IO_DMA1SAD+1:
+        case IO_DMA1SAD+2:
+        case IO_DMA1SAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 1 dest reg
+        case IO_DMA1DAD: 
+        case IO_DMA1DAD+1:
+        case IO_DMA1DAD+2:
+        case IO_DMA1DAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 1 transfer len
+        case IO_DMA1CNT_L:
+        case IO_DMA1CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 1 transfer control
+        case IO_DMA1CNT_H:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 1 transfer control
+        case IO_DMA1CNT_H+1:
+        {
+            io[addr] = v;
+            if(is_set(v,7)) // transfer enabeld
+            {
+                puts("dma 1 transfer enabled!");
+                exit(1);
+            }
+            break;
+        }
+
+
+
+        // DMA 2
+
+        // dma 2 source reg
+        case IO_DMA2SAD: 
+        case IO_DMA2SAD+1:
+        case IO_DMA2SAD+2:
+        case IO_DMA2SAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 2 dest reg
+        case IO_DMA2DAD: 
+        case IO_DMA2DAD+1:
+        case IO_DMA2DAD+2:
+        case IO_DMA2DAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 2 transfer len
+        case IO_DMA2CNT_L:
+        case IO_DMA2CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 2 transfer control
+        case IO_DMA2CNT_H:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 2 transfer control
+        case IO_DMA2CNT_H+1:
+        {
+            io[addr] = v;
+            if(is_set(v,7)) // transfer enabeld
+            {
+                puts("dma 2 transfer enabled!");
+                exit(1);
+            }
+            break;
+        }
+
+
+
+        // DMA 3
+
+        // dma 3 source reg
+        case IO_DMA3SAD: 
+        case IO_DMA3SAD+1:
+        case IO_DMA3SAD+2:
+        case IO_DMA3SAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 3 dest reg
+        case IO_DMA3DAD: 
+        case IO_DMA3DAD+1:
+        case IO_DMA3DAD+2:
+        case IO_DMA3DAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 3 transfer len
+        case IO_DMA3CNT_L:
+        case IO_DMA3CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 3 transfer control
+        case IO_DMA3CNT_H:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 3 transfer control
+        case IO_DMA3CNT_H+1:
+        {
+            io[addr] = v;
+            if(is_set(v,7)) // transfer enabeld
+            {
+                puts("dma 3 transfer enabled!");
+                exit(1);
+            }
+            break;
+        }
+
+
+
+ 
+        // timer 0  reload value
+        case IO_TM0CNT_L:
+        case IO_TM0CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // timer 0 control
+        case IO_TM0CNT_H:
+        {
+            io[addr] = v;
+            if(is_set(v,7))
+            {
+                puts("timer 0 enabled!");
+                exit(1);
+            }
+            break;
+        } 
+
+        // unused
+        case IO_TM0CNT_H+1:
+        {
+            break;
+        }
+
+
+        // timer 1  reload value
+        case IO_TM1CNT_L:
+        case IO_TM1CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // timer 1 control
+        case IO_TM1CNT_H:
+        {
+            io[addr] = v;
+            if(is_set(v,7))
+            {
+                puts("timer 1 enabled!");
+                exit(1);
+            }
+            break;
+        } 
+
+        // unused
+        case IO_TM1CNT_H+1:
+        {
+            break;
+        }
+
+
+
+
+        // timer 2  reload value
+        case IO_TM2CNT_L:
+        case IO_TM2CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // timer 2 control
+        case IO_TM2CNT_H:
+        {
+            io[addr] = v;
+            if(is_set(v,7))
+            {
+                puts("timer 2 enabled!");
+                exit(1);
+            }
+            break;
+        } 
+
+        // unused
+        case IO_TM2CNT_H+1:
+        {
+            break;
+        }
+
+
+        // timer 3  reload value
+        case IO_TM3CNT_L:
+        case IO_TM3CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // timer 3 control
+        case IO_TM3CNT_H:
+        {
+            io[addr] = v;
+            if(is_set(v,7))
+            {
+                puts("timer 3 enabled!");
+                exit(1);
+            }
+            break;
+        } 
+
+        // unused
+        case IO_TM3CNT_H+1:
+        {
+            break;
+        }
+
+
+
+        case IO_IE: // interrupt enable
+        {
+            io[addr] = v;
+            break;
+        }
+
+        case IO_IE+1:
+        {
+            io[addr] = v & ~0xc0;
+            break;
+        }
+
+        case IO_IF: // interrupt flag (whats the behavior here?)
+        {
+            io[addr] = v;
+            break;
+        }
+
+        case IO_IF+1:
+        {
+            io[addr] = v & ~0xc0;
+            break;
+        }
+
+        case IO_WAITCNT: // configures game pak access times
+        {
+            io[addr] = v;
+            break;
+        }
+
+        case IO_WAITCNT+1: 
+        {
+            io[addr] = v & ~0x20;
+            break;
+        }        
+
+        
+        case IO_WAITCNT+2: // top half not used
+        case IO_WAITCNT+3: 
+        {
             break;
         }
 
@@ -653,13 +1148,20 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             break;
         }
 
+        // gba bios inits this to one to know its not in initial boot 
+        case IO_POSTFLG:
+        {
+            io[addr] = v & 1;
+            break;
+        }
 
 
 
         default:
         {    
-            printf("unknown io reg write at %08x\n",addr);
-            exit(1);
+            //printf("unknown io reg write at %08x:%08x\n",addr,cpu->get_pc());
+            io[addr] = v; // get this done fast <--- fix later
+            //exit(1);
         }
     }
 }

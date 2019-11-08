@@ -110,6 +110,25 @@ inline Cpu_mode cpu_mode_from_bits(int v)
 }
 
 
+inline uint32_t get_cpsr_mode_bits(Cpu_mode mode)
+{
+    switch(mode)
+    {
+        case USER: return 0b10000;
+        case FIQ: return 0b10001;
+        case IRQ: return 0b10010; 
+        case SUPERVISOR: return 0b10011;
+        case ABORT: return 0b10111;
+        case UNDEFINED: return 0b11011;
+        case SYSTEM: return 0b11111;
+        default:
+        { 
+            printf("unknown mode for cpsr flag: %08x\n",mode);
+            exit(1);
+        }        
+    }    
+}
+
 
 // TODO these aint handling edge cases
 // with large shifts

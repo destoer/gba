@@ -17,6 +17,7 @@ public:
     Display_mode get_mode() const { return mode; }
     void set_mode(Display_mode mode) { this->mode = mode; }
     void set_cycles(int cycles) { cyc_cnt = cycles; }
+    void load_reference_point_regs();
 
     static constexpr int X = 240;
     static constexpr int Y = 160;    
@@ -24,6 +25,8 @@ public:
     bool new_vblank = false;
 private:
 
+    uint32_t reference_point_x;
+    uint32_t reference_point_y;
 
     void render();
     void advance_line();

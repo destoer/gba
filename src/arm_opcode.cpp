@@ -75,7 +75,7 @@ void Cpu::exec_arm()
 void Cpu::arm_unknown(uint32_t opcode)
 {
     uint32_t op = ((opcode >> 4) & 0xf) | ((opcode >> 16) & 0xff0);
-    printf("[cpu-arm]unknown opcode %08x:%08x\n",opcode,op);
+    printf("[cpu-arm %08x]unknown opcode %08x:%08x\n",regs[PC],opcode,op);
     print_regs();
     exit(1);
 }
@@ -439,6 +439,7 @@ void Cpu::arm_psr(uint32_t opcode)
         {
             // mode switch if mode bits are overwritten
             // 0:4 (arm has different values to us for it)
+            printf("%x: %s\n",v,mode_names[cpu_mode_from_bits(v & 0x1f)]);
             switch_mode(cpu_mode_from_bits(v & 0x1f));
         }
 
@@ -524,6 +525,22 @@ void Cpu::arm_data_processing(uint32_t opcode)
 
     // if s bit is set update flags
     bool update_flags = is_set(opcode,20);
+
+
+    if(update_flags && rd == PC)
+    {
+        printf("reti %08x\n",regs[PC]);
+        if(cpu_mode < USER)
+        {
+            puts("illegal data processing s with pc");
+        }
+        
+        else
+        {
+            cpsr = status_banked[cpu_mode];
+        }
+    }
+
 
     // default to preserve the carry
     // incase of a zero shift
@@ -669,6 +686,17 @@ void Cpu::arm_data_processing(uint32_t opcode)
             break;
         }
 
+
+        case 0x9:
+        {
+            logical_eor(op1,op2,update_flags);
+            if(update_flags)
+            {
+                cpsr = shift_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            }            
+            break;
+        }
+
         case 0xa: // cmp
         {
             sub(op1,op2,update_flags);
@@ -752,6 +780,8 @@ void Cpu::arm_branch_and_exchange(uint32_t opcode)
     // if bit 0 of rn is a 1
     // subsequent instrs decoded as thumb
     is_thumb = regs[rn] & 1;
+
+    cpsr = is_thumb? set_bit(cpsr,5) : deset_bit(cpsr,5);
 
     // branch
     regs[PC] = regs[rn] & ~1;

@@ -81,6 +81,9 @@ private:
     void thumb_get_rel_addr(uint16_t opcode);
     void thumb_load_store_reg(uint16_t opcode);
     void thumb_load_store_sbh(uint16_t opcode);
+    void thumb_swi(uint16_t opcode);
+    void thumb_sp_add(uint16_t opcode);
+    void thumb_load_store_sp(uint16_t opcode);
 
     // cpu operations eg adds
     uint32_t add(uint32_t v1, uint32_t v2, bool s);

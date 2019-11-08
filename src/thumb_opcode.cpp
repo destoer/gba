@@ -36,6 +36,68 @@ void Cpu::thumb_unknown(uint16_t opcode)
     exit(1);
 }
 
+
+void Cpu::thumb_load_store_sp(uint16_t opcode)
+{
+    uint8_t nn = (opcode & 0xff) * 4;
+    int rd = (opcode >> 8) & 0x7;
+    bool l = is_set(opcode,11);
+
+    uint32_t addr = regs[SP] + nn;
+
+    if(l)
+    {
+        regs[rd] = mem->read_memt(addr,WORD);
+        regs[rd] = rotr(regs[rd],(addr&3)*8);
+        cycle_tick(3); // 1s + 1n + 1i for ldr        
+    }
+
+    else
+    {
+        mem->write_memt(addr,regs[rd],WORD);
+        cycle_tick(2); // 2s for str
+    }
+
+}
+
+
+void Cpu::thumb_sp_add(uint16_t opcode)
+{
+    bool u = !is_set(opcode,7);
+    int nn = (opcode & 127) * 4;
+
+    regs[SP] += u? nn : -nn;
+
+    cycle_tick(1); // 1 s cycle    
+}
+
+// start here
+// software interrupt (figure out interrupt vectors and what damb mode it swaps too)
+// ^ not sure im reading from the right place for the vector table
+void Cpu::thumb_swi(uint16_t opcode)
+{
+    printf("int (%08x)\n",regs[PC]);
+
+    // do we even do anything with nn!?
+    UNUSED(opcode);
+
+    // spsr for supervisor = cpsr
+    status_banked[SUPERVISOR] = cpsr;
+
+    // lr in supervisor mode set to return addr
+    hi_banked[SUPERVISOR][1] = regs[PC];
+
+    // supervisor mode switch
+    switch_mode(SUPERVISOR);
+
+    // branch to interrupt vector
+    regs[PC] = 0x8;
+    is_thumb = false; // switch to arm mode
+    deset_bit(cpsr,5); // toggle thumb in cpsr
+
+    cycle_tick(3); // 2s + 1n;
+}
+
 void Cpu::thumb_get_rel_addr(uint16_t opcode)
 {
     uint32_t offset = (opcode & 0xff) * 4;
@@ -317,6 +379,9 @@ void Cpu::thumb_hi_reg_ops(uint16_t opcode)
             // if bit 0 of rn is a 1
             // subsequent instrs decoded as thumb
             is_thumb = rs_val & 1;
+
+            // set the thumb bit
+            cpsr = is_thumb? set_bit(cpsr,5) : deset_bit(cpsr,5);
 
             // branch
             regs[PC] = rs_val & ~1;

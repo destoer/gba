@@ -21,8 +21,29 @@ void Disass::init_thumb_disass_table()
     for(int i = 0; i < 256; i++)
     {
 
+        // THUMB.11: load/store SP-relative
+        if(((i >> 4) & 0b1111) == 0b1001)
+        {
+            disass_thumb_table[i] = disass_thumb_load_store_sp;
+        }
+
+        // THUMB.13: add offset to stack pointer
+        else if(i == 0b10110000)
+        {
+            disass_thumb_table[i] = disass_thumb_sp_add;
+        }
+
+
+
+        // THUMB.17: software interrupt and breakpoint
+        else if(i  == 0b11011111)
+        {
+            disass_thumb_table[i] = disass_thumb_swi;
+        }
+
+
         // THUMB.7: load/store with register offset
-        if(((i >> 4) & 0b1111) == 0b0101 && !is_set(i,1))
+        else if(((i >> 4) & 0b1111) == 0b0101 && !is_set(i,1))
         {
             disass_thumb_table[i] = disass_thumb_load_store_reg;
         }
@@ -127,6 +148,40 @@ void Disass::init_thumb_disass_table()
     }
 }
 
+
+std::string Disass::disass_thumb_load_store_sp(uint16_t opcode)
+{
+    uint8_t nn = (opcode & 0xff) * 4;
+    int rd = (opcode >> 8) & 0x7;
+    bool l = is_set(opcode,11);
+
+    std::string instr = l ? "ldr" : "str";
+
+    return fmt::format("{} {}, [sp,#{:x}]",instr,user_regs_names[rd],nn);
+}
+
+std::string Disass::disass_thumb_sp_add(uint16_t opcode)
+{
+    bool u = !is_set(opcode,7);
+    int nn = (opcode & 127) * 4;
+
+
+    if(u)
+    {
+        return fmt::format("add sp, #{:x}",nn);
+    }
+
+    else
+    {
+        return fmt::format("add sp, -#{:x}",nn);
+    }
+}
+
+std::string Disass::disass_thumb_swi(uint16_t opcode)
+{
+    uint8_t nn = opcode & 0xff;
+    return fmt::format("swi #{:x}",nn);
+}
 
 std::string Disass::disass_thumb_load_store_reg(uint16_t opcode)
 {

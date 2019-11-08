@@ -541,6 +541,12 @@ std::string Disass::disass_arm_data_processing(uint32_t opcode)
             break;
         }
 
+        case 0x9: // teq
+        {
+            return fmt::format("teq{} {},{}",suffix,user_regs_names[rn],operand2);
+            break;
+        }
+
         case 0xa: // cmp
         {
             return fmt::format("cmp{} {},{}",suffix,user_regs_names[rn],operand2);

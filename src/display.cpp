@@ -7,6 +7,12 @@ void Display::init(Mem *mem)
     this->mem = mem;
 }
 
+// need to update these during vblank?
+void Display::load_reference_point_regs()
+{
+    reference_point_x = mem->handle_read(mem->io,IO_BG2X_L,WORD);
+    reference_point_y = mem->handle_read(mem->io,IO_BG2Y_L,WORD);
+}
 
 void Display::advance_line()
 {

@@ -414,7 +414,6 @@ void Debugger::info(std::vector<std::string> command)
             std::cout << "exception: " << e.what() << "\n";
             return;
         }
-        restore_breakpoints();
     }
 
     else // command lookup 
@@ -425,6 +424,8 @@ void Debugger::info(std::vector<std::string> command)
             cpu->print_regs();
         }
     }
+
+    restore_breakpoints();
     putchar('\n');
 }
 

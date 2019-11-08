@@ -17,7 +17,10 @@ void Cpu::init(Display *disp, Mem *mem, Debugger *debug, Disass *disass)
     regs[LR] = 0x08000000;
     cpsr = 0x1f;
     regs[SP] = 0x03007f00;
+    hi_banked[SUPERVISOR][0] = 0x03007FE0;
+    hi_banked[IRQ][0] = 0x03007FA0;
     //arm_fill_pipeline(); // fill the intitial cpu pipeline
+    //regs[PC] = 0;
     init_opcode_table();
 }
 
@@ -35,8 +38,28 @@ void Cpu::init_thumb_opcode_table()
     for(int i = 0; i < 256; i++)
     {
 
+         // THUMB.11: load/store SP-relative
+        if(((i >> 4) & 0b1111) == 0b1001)
+        {
+            thumb_opcode_table[i] = thumb_load_store_sp;
+        }
+
+        // THUMB.13: add offset to stack pointer
+        else if(i == 0b10110000)
+        {
+            thumb_opcode_table[i] = thumb_sp_add;
+        }
+
+
+        // THUMB.17: software interrupt and breakpoint
+        else if(i  == 0b11011111)
+        {
+            thumb_opcode_table[i] = thumb_swi;
+        }
+
+
         // THUMB.8: load/store sign-extended byte/halfword
-        if(((i >> 4) & 0b1111) == 0b0101 && is_set(i,1))
+        else if(((i >> 4) & 0b1111) == 0b0101 && is_set(i,1))
         {
             thumb_opcode_table[i] = thumb_load_store_sbh;
         }
@@ -410,6 +433,10 @@ void Cpu::switch_mode(Cpu_mode new_mode)
     store_registers(cpu_mode);
     load_registers(new_mode);
     cpu_mode = new_mode; // finally change modes
+    
+    // set mode bits in cpsr
+    cpsr &= ~0b11111; // mask bottom 5 bits
+    cpsr |= get_cpsr_mode_bits(cpu_mode);
 }
 
 
@@ -465,7 +492,7 @@ void Cpu::load_registers(Cpu_mode mode)
 
         default:
         {
-            printf("unhandled mode switch: %d\n",mode);
+            printf("[load-regs %08x]unhandled mode switch: %x\n",regs[PC],mode);
             exit(1);
         }
     }    
@@ -521,7 +548,7 @@ void Cpu::store_registers(Cpu_mode mode)
 
         default:
         {
-            printf("unhandled mode switch: %d\n",mode);
+            printf("[store-regs %08x]unhandled mode switch: %x\n",regs[PC],mode);
             exit(1);
         }
     }
@@ -585,7 +612,7 @@ bool Cpu::cond_met(int opcode)
         case AL: return true;
 
     }
-    printf("cond_met fell through %08x!?\n",opcode);
+    printf("cond_met fell through %08x:%08x!?\n",opcode,regs[PC]);
     exit(1);
 }
 
