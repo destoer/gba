@@ -51,3 +51,4 @@ private:
 	SDL_Texture * texture;
     uint32_t next_time;
 };
+

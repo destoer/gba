@@ -1,10 +1,12 @@
 #include "headers/display.h"
 #include "headers/lib.h"
 #include "headers/memory.h"
+#include "headers/cpu.h"
 
-void Display::init(Mem *mem)
+void Display::init(Mem *mem, Cpu *cpu)
 {
     this->mem = mem;
+    this->cpu = cpu;
 }
 
 // need to update these during vblank?
@@ -26,6 +28,12 @@ void Display::advance_line()
     {
         // set the v counter flag
         mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],2);
+
+        if(is_set(mem->io[IO_DISPSTAT],5))
+        {
+            cpu->request_interrupt(Interrupt::VCOUNT);
+        }
+
     }
 
     else
@@ -218,6 +226,16 @@ void Display::render()
             break;
         }
 
+        case 0x3: // bg mode 3 
+        {
+            for(int x = 0; x < X; x++)
+            {
+                uint32_t c = convert_color(mem->handle_read(mem->vram,(ly*X*2)+x*2,HALF));
+                screen[ly][x] = c;
+            }
+            break;
+        }
+
 
         case 0x4: // mode 4 (does not handle scrolling)
         {
@@ -235,23 +253,32 @@ void Display::render()
         default: // mode ?
         {
             printf("unknown ppu mode %08x\n",render_mode);
-            exit(1);
+            //exit(1);
         }
     }
 }
 
+// not 100% sure when interrupts are reqed
 void Display::tick(int cycles)
 {
 
-
+/*
     // forced blank is active
+    // how does this work exsacly?
     // does the display still run during this?
     if(is_set(mem->io[IO_DISPCNT],7))
     {
         mode = VBLANK;
-        cyc_cnt = 0;
+        cyc_cnt += cycles;
+        if(cyc_cnt >= 280896)
+        {
+            new_vblank = true;
+            cyc_cnt = 0;
+        }
         return;
     }
+*/
+ 
 
 
     cyc_cnt += cycles;
@@ -265,6 +292,13 @@ void Display::tick(int cycles)
                 // enter hblank
                 mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],1);
                 mode = HBLANK;
+
+                // if hblank irq enabled
+                if(is_set(mem->io[IO_DISPSTAT],4))
+                {
+                    cpu->request_interrupt(Interrupt::HBLANK);
+                }
+                cpu->handle_dma(Dma_type::HBLANK);
             }
             break;
         }
@@ -280,6 +314,13 @@ void Display::tick(int cycles)
                 {
                     mode = VBLANK;
                     mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],0); // set vblank flag
+
+                    // if vblank irq enabled
+                    if(is_set(mem->io[IO_DISPSTAT],3))
+                    {
+                        cpu->request_interrupt(Interrupt::VBLANK);
+                    }
+                    cpu->handle_dma(Dma_type::VBLANK);
                 }
 
                 else
@@ -315,6 +356,14 @@ void Display::tick(int cycles)
             {
                 // enter hblank (dont set the internal mode here)
                 mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],1);
+
+                /* does the hblank irq fire here?
+                // if hblank irq enabled
+                if(is_set(mem->io[IO_DISPSTAT],4))
+                {
+                    cpu->request_interrupt(Interrupt::HBLANK);
+                }
+                */
             }
 
             break;

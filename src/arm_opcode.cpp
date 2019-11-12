@@ -265,9 +265,9 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
 
         if(l && has_pc) // cpsr = spsr
         {
-            if(cpu_mode < 5)  // not in user or system mode
+            if(cpu_mode < USER)  // not in user or system mode
             {
-                cpsr = status_banked[cpu_mode];
+                set_cpsr(status_banked[cpu_mode]);
             }
         }
 
@@ -300,7 +300,7 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
             // no writeback if base
             if(i == rn)
             {
-                w = false;
+               w = false;
             }
 
             regs[i] = mem->read_memt(addr,WORD);
@@ -415,6 +415,12 @@ void Cpu::arm_psr(uint32_t opcode)
         if(is_set(opcode,16)) mask |= 0x000000ff;
 
 
+        if(cpu_mode == USER) // only flags can be changed in user mode
+        {
+            mask = 0xf0000000;
+        }
+
+
         uint32_t v;
 
         if(is_imm)
@@ -434,21 +440,11 @@ void Cpu::arm_psr(uint32_t opcode)
         // only write specifed bits
         v &= mask;
         
-
-        if(mask & 0xff) // writes to mode bits?
-        {
-            // mode switch if mode bits are overwritten
-            // 0:4 (arm has different values to us for it)
-            printf("%x: %s\n",v,mode_names[cpu_mode_from_bits(v & 0x1f)]);
-            switch_mode(cpu_mode_from_bits(v & 0x1f));
-        }
-
-
         // all bits in mask should be deset
         // and then the value ored
         if(!spsr) // cpsr
         {
-            cpsr = (cpsr & ~mask) | v;
+            set_cpsr((cpsr & ~mask) | v);
         }
 
         else // spsr
@@ -457,7 +453,7 @@ void Cpu::arm_psr(uint32_t opcode)
         }
     }
 
-    // psr
+    // mrs
     else
     {
         int rd = (opcode >> 12) & 0xf;
@@ -526,22 +522,6 @@ void Cpu::arm_data_processing(uint32_t opcode)
     // if s bit is set update flags
     bool update_flags = is_set(opcode,20);
 
-
-    if(update_flags && rd == PC)
-    {
-        printf("reti %08x\n",regs[PC]);
-        if(cpu_mode < USER)
-        {
-            puts("illegal data processing s with pc");
-        }
-        
-        else
-        {
-            cpsr = status_banked[cpu_mode];
-        }
-    }
-
-
     // default to preserve the carry
     // incase of a zero shift
     bool shift_carry = is_set(cpsr,C_BIT);
@@ -554,18 +534,12 @@ void Cpu::arm_data_processing(uint32_t opcode)
     {
         // how to calc the carry?
         const int imm = opcode & 0xff;
-        const int shift = (opcode >> 8) & 0xf;
+        const int shift = ((opcode >> 8) & 0xf)*2;
 
-        if(shift != 0)
-        {
-            shift_carry = is_set(imm,shift-1);
-            op2 = rotr(imm,shift*2);
-        }
+        shift_carry = is_set(imm,shift-1);
 
-        else 
-        {
-            op2 = imm;
-        }    
+        // is this immediate?
+        op2 = rotr(imm,shift);
     }
 
     else // shifted register 
@@ -623,11 +597,24 @@ void Cpu::arm_data_processing(uint32_t opcode)
         cycles += 2;
     }
 
-   
 
+    if(update_flags && rd == PC)
+    {
+        if(cpu_mode >= USER)
+        {
+            printf("illegal data processing s with pc %08x\n",regs[PC]);
+            exit(1);
+        }
+        
+        else
+        {
+            set_cpsr(status_banked[cpu_mode]);
+        }
+    }
     
     // switch on the opcode to decide what to do
-    switch((opcode >> 21) & 0xf)
+    int op = (opcode >> 21) & 0xf;
+    switch(op)
     {
         case 0x0: //and
         {
@@ -652,6 +639,12 @@ void Cpu::arm_data_processing(uint32_t opcode)
         case 0x2: // sub
         {
             regs[rd] = sub(op1,op2,update_flags);
+            break;
+        }
+
+        case 0x3: // rsb
+        {
+            regs[rd] = sub(op2,op1,update_flags);
             break;
         }
 
@@ -683,11 +676,15 @@ void Cpu::arm_data_processing(uint32_t opcode)
         case 0x8: // tst (and without writeback)
         {
             logical_and(op1,op2,update_flags);
+            if(update_flags)
+            {
+                cpsr = shift_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            }             
             break;
         }
 
 
-        case 0x9:
+        case 0x9: // teq
         {
             logical_eor(op1,op2,update_flags);
             if(update_flags)
@@ -760,7 +757,7 @@ void Cpu::arm_data_processing(uint32_t opcode)
 
         default:
         {
-            puts("cpu unknown data processing instruction!");
+            printf("cpu unknown data processing instruction %x!\n",op);
             arm_unknown(opcode);
             break;
         }

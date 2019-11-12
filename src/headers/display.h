@@ -11,7 +11,7 @@ enum Display_mode
 class Display
 {
 public:
-    void init(Mem *mem);
+    void init(Mem *mem, Cpu *cpu);
     void tick(int cycles);
 
     Display_mode get_mode() const { return mode; }
@@ -41,7 +41,10 @@ private:
 
     int cyc_cnt = 0; // current number of elapsed cycles
     int ly = 0; // current number of cycles
+    
     Mem *mem;
+    Cpu *cpu;
+
     Display_mode mode = VISIBLE;
 };
 

@@ -94,7 +94,56 @@ void Debugger::palette_viewer(std::vector<std::string> command)
 void Debugger::tile_viewer(std::vector<std::string> command)
 {
 
-    UNUSED(command);
+
+    if(command.size() != 3)
+    {
+        puts("invalid number of args!");
+        return;
+    }
+
+    int bg_num;
+
+    try
+    {
+        bg_num = std::stoi(command[1]);
+    }
+
+    catch(std::exception &e)
+    {
+        std::cout << "unable to convert: " << command[1] << "to an int\n";
+        std::cout << "exception: " << e.what() << "\n";
+        return;
+    }
+
+    if(bg_num > 3)
+    {
+        printf("bg out of range %x\n",bg_num);
+        return;
+    }
+
+
+
+    int pal_num;
+
+    try
+    {
+        pal_num = std::stoi(command[2]);
+    }
+
+    catch(std::exception &e)
+    {
+        std::cout << "unable to convert: " << command[2] << "to an int\n";
+        std::cout << "exception: " << e.what() << "\n";
+        return;
+    }
+
+
+    if(pal_num > 15)
+    {
+        printf("bg pal out of range: %d\n",pal_num);
+        return;
+    }
+
 
 	// sdl setup 
 	
@@ -111,7 +160,7 @@ void Debugger::tile_viewer(std::vector<std::string> command)
 
 
 
-    uint16_t bg0_cnt = mem->handle_read(mem->io,IO_BG0CNT,HALF);
+    uint16_t bg0_cnt = mem->handle_read(mem->io,IO_BG0CNT+bg_num*ARM_WORD_SIZE,HALF);
     uint32_t bg_tile_data_base = ((bg0_cnt >> 2) & 0x3) * 0x4000;
 
     //256 color one pal 8bpp? or 16 color 16 pal 4bpp 
@@ -120,7 +169,6 @@ void Debugger::tile_viewer(std::vector<std::string> command)
     // dump all the tiles to the screen
     for(int i = 0; i < 1024; i++)
     {
-        uint32_t pal_num = 3; // we know what this is (pass as cmdline arg)
 
         // now we will rip the tile and blit it at the first space
         uint32_t tile_addr = bg_tile_data_base+(i*0x20); 

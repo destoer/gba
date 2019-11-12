@@ -5,7 +5,7 @@ GBA::GBA(std::string filename)
 {
     mem.init(filename,&debug,&cpu,&disp);
     disass.init(&mem,&cpu);
-    disp.init(&mem);
+    disp.init(&mem,&cpu);
     cpu.init(&disp,&mem,&debug,&disass);
     debug.init(&mem,&cpu,&disp,&disass);
 

@@ -49,6 +49,7 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu,Display *disp)
 
 void Mem::tick_mem_access(int mode)
 {
+    // should unmapped addresses still tick a cycle?
     if(mem_region != UNDEFINED)
     {
         cpu->cycle_tick(wait_states[mem_region][mode]);
@@ -66,7 +67,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
 
     if((addr&0x1FFFFFF) > rom.size())
     {
-        printf("rom read out of range: %08x:%08x\n",addr&0x1FFFFFF,rom.size());
+        printf("rom read out of range: %08x:%08x:%08x\n",addr&0x1FFFFFF,rom.size(),cpu->get_pc());
         exit(1);
     }
 
@@ -104,7 +105,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
             if(addr <= 0x0e00ffff)
             {
                 mem_region = SRAM;
-                puts("sram read");
+                printf("sram read %08x:%08x\n",cpu->get_pc(),addr);
                 exit(1);
             }
                 
@@ -123,6 +124,21 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
 // need checks for endianess here for completeness
 uint32_t Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mode)
 {
+
+#ifdef DEBUG // bounds check the memory access
+
+    uint32_t sz = access_sizes[mode];
+
+
+    if(buf.size() < addr + sz)
+    {
+        printf("out of range handle read at: %08x\n",cpu->get_pc());
+        exit(1);
+    }
+#endif
+
+
+
     switch(mode)
     {
         case BYTE:
@@ -218,6 +234,43 @@ uint8_t Mem::read_io_regs(uint32_t addr)
         }
 
 
+
+
+
+
+        // dma  word count
+        // read only but may be read from
+        // as a word to access the higher part
+        case IO_DMA0CNT_L:
+        case IO_DMA0CNT_L+1:
+        case IO_DMA1CNT_L:
+        case IO_DMA1CNT_L+1:
+        case IO_DMA2CNT_L:
+        case IO_DMA2CNT_L+1:                        
+        case IO_DMA3CNT_L:
+        case IO_DMA3CNT_L+1:
+        {
+            return 0;
+            break;
+        }
+
+
+        // dma  transfer control
+        case IO_DMA0CNT_H:
+        case IO_DMA0CNT_H+1:
+        case IO_DMA1CNT_H:
+        case IO_DMA1CNT_H+1:
+        case IO_DMA2CNT_H:
+        case IO_DMA2CNT_H+1:                               
+        case IO_DMA3CNT_H:
+        case IO_DMA3CNT_H+1:
+        {
+            return io[addr];
+            break;
+        }
+
+
+
         case IO_KEYINPUT:
         {
             return io[IO_KEYINPUT];
@@ -242,6 +295,34 @@ uint8_t Mem::read_io_regs(uint32_t addr)
             break;
         }
 
+        case IO_IE: // inteerupt enable
+        case IO_IE+1:
+        {
+            return io[addr];
+        }
+
+
+        case IO_IF:
+        case IO_IF+1:
+        {
+            return io[addr];
+        }
+
+
+        case IO_WAITCNT:
+        case IO_WAITCNT+1:
+        {
+            return io[addr];
+        }
+
+        // unused
+        case IO_WAITCNT+2:
+        case IO_WAITCNT+3:
+        {
+            return 0;
+        }
+
+
         //unused
         case 0x400020A: 
         case 0x400020B:
@@ -258,8 +339,9 @@ uint8_t Mem::read_io_regs(uint32_t addr)
 
         default:
         {    
-            printf("unknown io reg read at %08x:%08x\n",addr,cpu->get_pc());
-            exit(1);
+            //printf("unknown io reg read at %08x:%08x\n",addr,cpu->get_pc());
+            //exit(1);
+            return io[addr];
         }
     }
 }
@@ -511,6 +593,20 @@ void Mem::write_external(uint32_t addr,uint32_t v,Access_type mode)
 // need checks for endianess here for completeness
 void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access_type mode)
 {
+
+#ifdef DEBUG // bounds check the memory access
+
+    uint32_t sz = access_sizes[mode];
+
+
+    if(buf.size() < addr + sz)
+    {
+        printf("out of range handle write at: %08x\n",cpu->get_pc());
+        exit(1);
+    }
+#endif
+
+
     switch(mode)
     {
         case BYTE:
@@ -555,6 +651,7 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
 
         case IO_DISPCNT:
         {
+            /*
             // enter forced blank
             if(!is_set(io[addr],7) && is_set(v,7))
             {
@@ -568,7 +665,7 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             {
                 disp->set_mode(VISIBLE);
             }
-
+            */
 
             // gba / cgb mode is reserved
             io[addr] = v & ~8;
@@ -810,8 +907,7 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             io[addr] = v;
             if(is_set(v,7)) // transfer enabeld
             {
-                puts("dma 0 transfer enabled!");
-                exit(1);
+                cpu->handle_dma(Dma_type::IMMEDIATE);
             }
             break;
         }
@@ -865,8 +961,7 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             io[addr] = v;
             if(is_set(v,7)) // transfer enabeld
             {
-                puts("dma 1 transfer enabled!");
-                exit(1);
+                cpu->handle_dma(Dma_type::IMMEDIATE);
             }
             break;
         }
@@ -916,8 +1011,7 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             io[addr] = v;
             if(is_set(v,7)) // transfer enabeld
             {
-                puts("dma 2 transfer enabled!");
-                exit(1);
+                cpu->handle_dma(Dma_type::IMMEDIATE);
             }
             break;
         }
@@ -967,8 +1061,8 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             io[addr] = v;
             if(is_set(v,7)) // transfer enabeld
             {
-                puts("dma 3 transfer enabled!");
-                exit(1);
+                printf("dma started %08x\n",cpu->get_pc());
+                cpu->handle_dma(Dma_type::IMMEDIATE);
             }
             break;
         }
@@ -990,8 +1084,9 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             io[addr] = v;
             if(is_set(v,7))
             {
-                puts("timer 0 enabled!");
-                exit(1);
+                // reload the timer
+                cpu->set_timer(0,handle_read(io,IO_TM0CNT_L,HALF));
+                break;
             }
             break;
         } 
@@ -1017,8 +1112,7 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             io[addr] = v;
             if(is_set(v,7))
             {
-                puts("timer 1 enabled!");
-                exit(1);
+                cpu->set_timer(1,handle_read(io,IO_TM1CNT_L,HALF));
             }
             break;
         } 
@@ -1046,8 +1140,7 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             io[addr] = v;
             if(is_set(v,7))
             {
-                puts("timer 2 enabled!");
-                exit(1);
+                cpu->set_timer(2,handle_read(io,IO_TM2CNT_L,HALF));
             }
             break;
         } 
@@ -1073,8 +1166,7 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             io[addr] = v;
             if(is_set(v,7))
             {
-                puts("timer 3 enabled!");
-                exit(1);
+                cpu->set_timer(3,handle_read(io,IO_TM3CNT_L,HALF));
             }
             break;
         } 
@@ -1085,6 +1177,17 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             break;
         }
 
+
+
+        case IO_IME: // 0th bit toggles ime
+        {
+            ime = is_set(v,0);
+            break;
+        }
+        case IO_IME + 1:
+        { 
+            break; // do nothing
+        }
 
 
         case IO_IE: // interrupt enable
@@ -1099,15 +1202,15 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             break;
         }
 
-        case IO_IF: // interrupt flag (whats the behavior here?)
+        case IO_IF: // interrupt flag writing a 1 desets the bit
         {
-            io[addr] = v;
+            io[addr] &= ~v;
             break;
         }
 
         case IO_IF+1:
         {
-            io[addr] = v & ~0xc0;
+            io[addr] &= ~(v & ~0xc0);
             break;
         }
 
@@ -1131,15 +1234,6 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         }
 
 
-        case IO_IME: // 0th bit toggles ime
-        {
-            ime = is_set(v,0);
-            break;
-        }
-        case IO_IME + 1:
-        { 
-            break; // do nothing
-        }
 
         //unused
         case 0x400020A&IO_MASK: 

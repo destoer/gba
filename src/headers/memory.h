@@ -21,6 +21,7 @@ public:
     void write_mem(uint32_t addr,uint32_t v,Access_type mode);    
     void write_memt(uint32_t addr,uint32_t v,Access_type mode);
 
+    bool get_ime() const { return ime; }
 
     // probablly a better way do this than to just give free reign 
     // over the array (i.e for the video stuff give display class ownership)

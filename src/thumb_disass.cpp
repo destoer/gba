@@ -180,7 +180,7 @@ std::string Disass::disass_thumb_sp_add(uint16_t opcode)
 std::string Disass::disass_thumb_swi(uint16_t opcode)
 {
     uint8_t nn = opcode & 0xff;
-    return fmt::format("swi #{:x}",nn);
+    return fmt::format("swi #0x{:x}",nn);
 }
 
 std::string Disass::disass_thumb_load_store_reg(uint16_t opcode)

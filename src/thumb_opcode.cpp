@@ -76,8 +76,6 @@ void Cpu::thumb_sp_add(uint16_t opcode)
 // ^ not sure im reading from the right place for the vector table
 void Cpu::thumb_swi(uint16_t opcode)
 {
-    printf("int (%08x)\n",regs[PC]);
-
     // do we even do anything with nn!?
     UNUSED(opcode);
 
@@ -90,11 +88,14 @@ void Cpu::thumb_swi(uint16_t opcode)
     // supervisor mode switch
     switch_mode(SUPERVISOR);
 
+    
+    // switch to arm mode
+    is_thumb = false; // switch to arm mode
+    cpsr = deset_bit(cpsr,5); // toggle thumb in cpsr
+    cpsr = set_bit(cpsr,7); //set the irq bit to mask interrupts
+
     // branch to interrupt vector
     regs[PC] = 0x8;
-    is_thumb = false; // switch to arm mode
-    deset_bit(cpsr,5); // toggle thumb in cpsr
-
     cycle_tick(3); // 2s + 1n;
 }
 
@@ -429,6 +430,34 @@ void Cpu::thumb_alu(uint16_t opcode)
             break;
         }
 
+        case 0x3: // lsr 
+        {
+            bool c = is_set(cpsr,C_BIT);
+            regs[rd] = barrel_shift(LSR,regs[rd],regs[rs]&0xff,c,false);
+            set_nz_flag(regs[rd]);
+            cpsr = c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            cycle_tick(2); // 1s + 1i
+            break;            
+        }
+
+        case 0x4: // asr
+        {
+            bool c = is_set(cpsr,C_BIT);
+            regs[rd] = barrel_shift(ASR,regs[rd],regs[rs]&0xff,c,false);
+            set_nz_flag(regs[rd]);
+            cpsr = c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);   
+            cycle_tick(2); // 1s + 1i
+            break;         
+        }
+
+
+        case 0x6: // sbc
+        {
+            regs[rd] = sbc(regs[rd],regs[rs],true);
+            break;
+        }
+
+        
         case 0xe: // bic
         {
             regs[rd] &= ~regs[rs];

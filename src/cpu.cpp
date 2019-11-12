@@ -1,4 +1,5 @@
 #include "headers/cpu.h"
+#include "headers/memory.h"
 #include "headers/display.h"
 #include <limits.h>
 
@@ -50,20 +51,17 @@ void Cpu::init_thumb_opcode_table()
             thumb_opcode_table[i] = thumb_sp_add;
         }
 
-
         // THUMB.17: software interrupt and breakpoint
         else if(i  == 0b11011111)
         {
             thumb_opcode_table[i] = thumb_swi;
         }
 
-
         // THUMB.8: load/store sign-extended byte/halfword
         else if(((i >> 4) & 0b1111) == 0b0101 && is_set(i,1))
         {
             thumb_opcode_table[i] = thumb_load_store_sbh;
         }
-
 
         // THUMB.7: load/store with register offset
         else if(((i >> 4) & 0b1111) == 0b0101 && !is_set(i,1))
@@ -77,7 +75,6 @@ void Cpu::init_thumb_opcode_table()
             thumb_opcode_table[i] = thumb_get_rel_addr;
         }
         
-
         // THUMB.18: unconditional branch
         else if(((i >> 3) & 0b11111) == 0b11100)
         {
@@ -97,7 +94,6 @@ void Cpu::init_thumb_opcode_table()
             thumb_opcode_table[i] = thumb_push_pop;
         }
 
-
         // THUMB.9: load/store with immediate offset
         else if(((i>>5) & 0b111) == 0b011)
         {
@@ -110,8 +106,6 @@ void Cpu::init_thumb_opcode_table()
         {
             thumb_opcode_table[i] = thumb_hi_reg_ops;
         }
-
-
 
         //  THUMB.15: multiple load/store
         else if(((i >> 4) & 0b1111) == 0b1100)
@@ -294,12 +288,58 @@ void Cpu::init_arm_opcode_table()
 void Cpu::cycle_tick(int cycles)
 {
     disp->tick(cycles);
+    tick_timers(cycles);
 }
+
+void Cpu::tick_timers(int cycles)
+{
+
+    static constexpr uint32_t timer_lim[4] = {1,64,256,1024};
+    static constexpr Interrupt interrupt_table[4] = {Interrupt::TIMER0,Interrupt::TIMER1,Interrupt::TIMER2,Interrupt::TIMER3};
+ 
+    // ignore count up timing for now
+    for(int i = 0; i < 4; i++)
+    {
+        uint32_t offset = i * ARM_HALF_SIZE;
+        uint16_t cnt = mem->handle_read(mem->io,IO_TM0CNT_H+offset,HALF);
+
+        if(!is_set(cnt,7)) // timer is not enabled
+        {
+            continue;
+        }
+
+        if(is_set(cnt,2)) // count up timer
+        {
+            puts("count up timer!");
+        }
+
+        uint32_t lim = timer_lim[i];
+
+        timer_scale[i] += cycles;
+
+        if(timer_scale[i] >= lim)
+        {
+            timer_scale[i] %= lim;
+            timers[i] += 1;
+            if(timers[i] >= 0x10000) // overflowed
+            {
+                // add the reload values
+                timers[i] = mem->handle_read(mem->io,IO_TM0CNT_L+offset,HALF);
+                if(is_set(cnt,6))
+                {
+                    request_interrupt(interrupt_table[i]);
+                }
+            }
+        }
+    }    
+}
+
 
 // get this booting into armwrestler
 // by skipping the state forward
 void Cpu::step()
 {
+
     if(is_thumb) // step the cpu in thumb mode
     {
         exec_thumb();
@@ -309,6 +349,9 @@ void Cpu::step()
     {
         exec_arm();
     }
+
+    // handle interrupts
+    do_interrupts();
 }
 
 // start here
@@ -316,12 +359,13 @@ void Cpu::step()
 void Cpu::print_regs()
 {
 
-    printf("current mode: %s\n",mode_names[cpu_mode]);
-    printf("cpu state: %s\n", is_thumb? "thumb" : "arm");
-
     // update current registers
     // so they can be printed
     store_registers(cpu_mode);
+
+
+    printf("current mode: %s\n",mode_names[cpu_mode]);
+    printf("cpu state: %s\n", is_thumb? "thumb" : "arm");
 
     puts("USER & SYSTEM REGS");
 
@@ -498,6 +542,17 @@ void Cpu::load_registers(Cpu_mode mode)
     }    
 }
 
+
+void Cpu::set_cpsr(uint32_t v)
+{
+    cpsr = v;
+
+    // confirm this?
+    is_thumb = is_set(cpsr,5);
+    Cpu_mode new_mode = cpu_mode_from_bits(cpsr & 0b11111);
+    switch_mode(new_mode);    
+}
+
 // store current active registers back into the copies
 void Cpu::store_registers(Cpu_mode mode)
 {
@@ -555,6 +610,25 @@ void Cpu::store_registers(Cpu_mode mode)
 }
 
 
+Cpu_mode Cpu::cpu_mode_from_bits(uint32_t v)
+{
+    switch(v)
+    {
+        case 0b10000: return USER;
+        case 0b10001: return FIQ;
+        case 0b10010: return IRQ;
+        case 0b10011: return SUPERVISOR;
+        case 0b10111: return ABORT;
+        case 0b11011: return UNDEFINED;
+        case 0b11111: return SYSTEM;
+    }
+
+    // clearly no program should attempt this 
+    // but is their a defined behavior for it?
+    printf("unknown mode from bits: %08x:%08x\n",v,regs[PC]);
+    print_regs();
+    exit(1);
+}
 
 
 // tests if a cond field in an instr has been met
@@ -768,4 +842,159 @@ uint32_t Cpu::logical_eor(uint32_t v1, uint32_t v2, bool s)
         set_nz_flag(ans);
     }
     return ans;
+}
+
+
+
+// write the interrupt req bit
+void Cpu::request_interrupt(Interrupt interrupt)
+{
+    uint16_t io_if = mem->handle_read(mem->io,IO_IF,HALF);
+    io_if = set_bit(io_if,static_cast<uint32_t>(interrupt));
+    mem->handle_write(mem->io,IO_IF,io_if ,HALF);
+}
+
+
+void Cpu::do_interrupts()
+{
+    uint16_t interrupt_enable = mem->handle_read(mem->io,IO_IE,HALF);
+    uint16_t interrupt_flag = mem->handle_read(mem->io,IO_IF,HALF);
+
+    if(mem->get_ime() && !is_set(cpsr,7)) // ime on and irqs not masked!
+    {
+        for(int i = 0; i < 14; i++)
+        {
+            if(is_set(interrupt_enable,i) && is_set(interrupt_flag,i))
+            {
+                printf("interrupt fired %08x\n",i);
+                //exit(1);
+                service_interrupt();
+                break; // do we serve multiple interrupts?
+            }
+        }
+    }
+}
+
+// do we need to indicate the interrupt somewhere?
+// or does the handler check if?
+void Cpu::service_interrupt()
+{
+    // spsr for supervisor = cpsr
+    status_banked[IRQ] = cpsr;
+
+    // lr in supervisor mode set to return addr
+    hi_banked[IRQ][1] = regs[PC];
+
+    // supervisor mode switch
+    switch_mode(IRQ);
+
+    
+    // switch to arm mode
+    is_thumb = false; // switch to arm mode
+    cpsr = deset_bit(cpsr,5); // toggle thumb in cpsr
+    cpsr = set_bit(cpsr,7); //set the irq bit to mask interrupts
+
+    regs[PC] = 0x18; // irq handler    
+}
+
+
+// check if for each dma if any of the start timing conds have been met
+// should store all the dma information in struct so its nice to access
+// also find out when dmas are actually processed?
+void Cpu::handle_dma(Dma_type req_type)
+{
+
+
+    if(dma_in_progress) 
+    { 
+        return; 
+    }
+
+    uint16_t dma_cnt[4];
+
+    dma_cnt[0] = mem->handle_read(mem->io,IO_DMA0CNT_H,HALF);
+    dma_cnt[1] = mem->handle_read(mem->io,IO_DMA1CNT_H,HALF);
+    dma_cnt[2] = mem->handle_read(mem->io,IO_DMA2CNT_H,HALF);
+    dma_cnt[3] = mem->handle_read(mem->io,IO_DMA3CNT_H,HALF);
+
+    static constexpr uint32_t zero_table[4] = {0x4000,0x4000,0x4000,0x10000};
+    if(req_type == Dma_type::VBLANK || req_type == Dma_type::HBLANK || req_type == Dma_type::IMMEDIATE)
+    {
+        for(int i = 0; i < 4; i++)
+        {
+            if(is_set(dma_cnt[i],15)) // dma is enabled
+            {
+                Dma_type dma_type = static_cast<Dma_type>((dma_cnt[i] >> 12) & 0x3);
+
+                if(req_type == dma_type)
+                {
+                    uint32_t base_addr = IO_DMA0SAD + i * 12;
+                    uint32_t src = mem->handle_read(mem->io,base_addr,WORD);
+                    uint32_t dst = mem->handle_read(mem->io,base_addr+4,WORD);
+                    uint32_t nn =  mem->handle_read(mem->io,base_addr+8,HALF);
+
+                    // if a zero len transfer it uses the max len for that dma
+                    if(nn == 0)
+                    {
+                        nn = zero_table[i];
+                    }
+
+                    do_dma(src,dst,nn,dma_cnt[i],req_type,i);
+                    uint32_t cnt_addr = base_addr + 10;
+                    mem->handle_write(mem->io,cnt_addr,dma_cnt[i],HALF); // write back the control reg!
+                }
+            }
+        }
+    }
+    
+    // will have to check the special bit seperately here...
+    // we will only check a specific register here!
+    else
+    {
+        printf("unimplemented dma special type!");
+        exit(1);
+    }
+}
+
+
+// what kind of side affects can we have here!?
+// need to handle an n of 0 above in the calle
+// also need to handle repeats!
+
+// this needs to know the dma number aswell as the type of dma
+// <-- dma is halting my emulator haha
+void Cpu::do_dma(uint32_t source, uint32_t dest, uint32_t nn, uint16_t &dma_cnt,Dma_type req_type, int dma_number)
+{
+
+    source &= 0x0fffffff;
+    dest &= 0x0fffffff;
+
+
+    printf("%08x:%08x:%08x\n",source,dest,nn);
+
+    dma_in_progress = true;
+
+    if(nn == 0) { puts("dma unhandled n  = 0"); exit(1); }
+
+    for(size_t i = 0; i < nn; i++)
+    {
+        uint32_t offset = i * ARM_WORD_SIZE;
+        uint32_t v = mem->read_memt(source+offset,WORD);
+        mem->write_memt(dest+offset,v,WORD);
+    }
+
+    static constexpr Interrupt dma_interrupt[4] = {Interrupt::DMA0,Interrupt::DMA1,Interrupt::DMA2,Interrupt::DMA3}; 
+    if(is_set(dma_cnt,14)) // do irq on finish
+    {
+        request_interrupt(dma_interrupt[dma_number]);
+    }
+
+
+    if(!is_set(dma_cnt,9) || req_type == Dma_type::IMMEDIATE || is_set(dma_cnt,11) ) // dma does not repeat
+    {
+        dma_cnt = deset_bit(dma_cnt,15); // disable it
+    }
+    puts("finished dma!");
+
+    dma_in_progress = false;
 }
