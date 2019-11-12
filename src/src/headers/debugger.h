@@ -8,6 +8,7 @@ public:
 
     void init(Mem *mem, Cpu *cpu, Display *display, Disass *disass);
 
+
     void enter_debugger();
     void disable_breakpoints()
     {
@@ -130,6 +131,31 @@ private:
     void disass_addr(std::vector<std::string> command);
     void exec(std::vector<std::string> command);
     void write(std::vector<std::string> command);
+
+
+    static constexpr int PAL_X = 16;
+    static constexpr int PAL_Y = 16;
+
+    std::array<uint32_t,PAL_X*PAL_Y> pal_screen{0};
+	SDL_Window * pal_window;
+	SDL_Renderer * pal_renderer;
+	SDL_Texture * pal_texture;
+
+    void palette_viewer(std::vector<std::string> command);
+
+
+
+    void tile_viewer(std::vector<std::string> command);
+
+    static constexpr int TILE_X = 32 * 8;
+    static constexpr int TILE_Y = 32 * 8;
+
+    std::vector<uint32_t> tile_screen;
+	SDL_Window * tile_window;
+	SDL_Renderer * tile_renderer;
+	SDL_Texture * tile_texture;
+
+
 };
 
 

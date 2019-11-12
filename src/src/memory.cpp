@@ -1,12 +1,14 @@
 #include "headers/memory.h"
 #include "headers/cpu.h"
 #include "headers/debugger.h"
+#include "headers/display.h"
 
-void Mem::init(std::string filename, Debugger *debug,Cpu *cpu)
+void Mem::init(std::string filename, Debugger *debug,Cpu *cpu,Display *disp)
 {
     // init component
     this->debug = debug;
     this->cpu = cpu;
+    this->disp = disp;
 
     // read out rom
     read_file(filename,rom);
@@ -18,7 +20,7 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu)
     board_wram.resize(0x40000);
     chip_wram.resize(0x8000);
     io.resize(0x400);
-    bg_ram.resize(0x400);
+    pal_ram.resize(0x400);
     vram.resize(0x18000);
     oam.resize(0x400); 
     
@@ -27,8 +29,19 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu)
 
 
     // all unpressed
-    io[IO_KEYINPUT&IO_MASK] = 0xff;
-    io[(IO_KEYINPUT+1)&IO_MASK] = 0xff;
+    io[IO_KEYINPUT] = 0xff;
+    io[IO_KEYINPUT+1] = 0xff;
+
+
+
+    // read and copy in the bios rom
+    read_file("GBA.BIOS",bios_rom);
+
+    if(bios_rom.size() != 0x4000)
+    {
+        puts("invalid bios size!");
+        exit(1);
+    }
 }
 
 
@@ -36,6 +49,7 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu)
 
 void Mem::tick_mem_access(int mode)
 {
+    // should unmapped addresses still tick a cycle?
     if(mem_region != UNDEFINED)
     {
         cpu->cycle_tick(wait_states[mem_region][mode]);
@@ -53,7 +67,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
 
     if((addr&0x1FFFFFF) > rom.size())
     {
-        printf("rom read out of range: %08x:%08x\n",addr&0x1FFFFFF,rom.size());
+        printf("rom read out of range: %08x:%08x:%08x\n",addr&0x1FFFFFF,rom.size(),cpu->get_pc());
         exit(1);
     }
 
@@ -91,7 +105,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
             if(addr <= 0x0e00ffff)
             {
                 mem_region = SRAM;
-                puts("sram read");
+                printf("sram read %08x:%08x\n",cpu->get_pc(),addr);
                 exit(1);
             }
                 
@@ -108,8 +122,23 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
 
 //access handler for reads (for non io mapped mem)
 // need checks for endianess here for completeness
-inline uint32_t Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mode)
+uint32_t Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mode)
 {
+
+#ifdef DEBUG // bounds check the memory access
+
+    uint32_t sz = access_sizes[mode];
+
+
+    if(buf.size() < addr + sz)
+    {
+        printf("out of range handle read at: %08x\n",cpu->get_pc());
+        exit(1);
+    }
+#endif
+
+
+
     switch(mode)
     {
         case BYTE:
@@ -134,38 +163,54 @@ inline uint32_t Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_
 // this will require special handling
 uint8_t Mem::read_io_regs(uint32_t addr)
 {
+    addr &= IO_MASK;
     switch(addr)
     {
 
+        // should only be accessible from bios..
+        // handle this later
+        case IO_SOUNDBIAS:
+        case IO_SOUNDBIAS+1:
+        {
+            return io[addr];
+        }
+
+        // unused
+        case IO_SOUNDBIAS+2:
+        case IO_SOUNDBIAS+3:
+        {
+            return 0; 
+        }
+
         case IO_DISPCNT:
         {
-            return io[addr&IO_MASK];
+            return io[addr];
             break;
         }
 
         case IO_DISPCNT+1:
         {
-            return io[addr&IO_MASK];
+            return io[addr];
             break;
         }
 
         // these two are just stubs atm
         case IO_DISPSTAT:
         {
-            return io[addr&IO_MASK];
+            return io[addr];
             break;
         }
 
         case IO_DISPSTAT+1:
         {
-            return io[addr&IO_MASK];
+            return io[addr];
             break;
         }
 
 
         case IO_VCOUNT:
         {
-            return io[addr&IO_MASK];
+            return io[addr];
             break;
         }
 
@@ -189,16 +234,53 @@ uint8_t Mem::read_io_regs(uint32_t addr)
         }
 
 
+
+
+
+
+        // dma  word count
+        // read only but may be read from
+        // as a word to access the higher part
+        case IO_DMA0CNT_L:
+        case IO_DMA0CNT_L+1:
+        case IO_DMA1CNT_L:
+        case IO_DMA1CNT_L+1:
+        case IO_DMA2CNT_L:
+        case IO_DMA2CNT_L+1:                        
+        case IO_DMA3CNT_L:
+        case IO_DMA3CNT_L+1:
+        {
+            return 0;
+            break;
+        }
+
+
+        // dma  transfer control
+        case IO_DMA0CNT_H:
+        case IO_DMA0CNT_H+1:
+        case IO_DMA1CNT_H:
+        case IO_DMA1CNT_H+1:
+        case IO_DMA2CNT_H:
+        case IO_DMA2CNT_H+1:                               
+        case IO_DMA3CNT_H:
+        case IO_DMA3CNT_H+1:
+        {
+            return io[addr];
+            break;
+        }
+
+
+
         case IO_KEYINPUT:
         {
-            return io[IO_KEYINPUT&IO_MASK];
+            return io[IO_KEYINPUT];
             break;
         }
 
       
         case IO_KEYINPUT+1: // 10-15 unused
         {
-            return io[IO_KEYINPUT&IO_MASK];
+            return io[IO_KEYINPUT];
             break;
         }
 
@@ -213,6 +295,34 @@ uint8_t Mem::read_io_regs(uint32_t addr)
             break;
         }
 
+        case IO_IE: // inteerupt enable
+        case IO_IE+1:
+        {
+            return io[addr];
+        }
+
+
+        case IO_IF:
+        case IO_IF+1:
+        {
+            return io[addr];
+        }
+
+
+        case IO_WAITCNT:
+        case IO_WAITCNT+1:
+        {
+            return io[addr];
+        }
+
+        // unused
+        case IO_WAITCNT+2:
+        case IO_WAITCNT+3:
+        {
+            return 0;
+        }
+
+
         //unused
         case 0x400020A: 
         case 0x400020B:
@@ -221,10 +331,17 @@ uint8_t Mem::read_io_regs(uint32_t addr)
             break;
         }
 
+        case IO_POSTFLG:
+        {
+            return io[addr] & 1;
+            break;
+        }
+
         default:
         {    
-            printf("unknown io reg read at %08x\n",addr);
-            exit(1);
+            //printf("unknown io reg read at %08x:%08x\n",addr,cpu->get_pc());
+            //exit(1);
+            return io[addr];
         }
     }
 }
@@ -273,7 +390,7 @@ uint32_t Mem::read_oam(uint32_t addr,Access_type mode)
 {
     mem_region = OAM;
     //return oam[addr & 0x3ff];
-    return handle_read(oam,addr&0x3ff,mode);
+    return handle_read(oam,addr&0x3ff,mode);   
 }
 
 uint32_t Mem::read_vram(uint32_t addr,Access_type mode)
@@ -281,13 +398,16 @@ uint32_t Mem::read_vram(uint32_t addr,Access_type mode)
     mem_region = VRAM;
     //return vram[addr-0x06000000];
     return handle_read(vram,addr-0x06000000,mode);
+    
+
 }
 
-uint32_t Mem::read_obj_ram(uint32_t addr,Access_type mode)
+uint32_t Mem::read_pal_ram(uint32_t addr,Access_type mode)
 {
-    mem_region = BG;
-    //return bg_ram[addr & 0x3ff];
-    return handle_read(bg_ram,addr&0x3ff,mode);
+    mem_region = PAL;
+    //return pal_ram[addr & 0x3ff];
+    return handle_read(pal_ram,addr&0x3ff,mode);
+
 }
 
 uint32_t Mem::read_board_wram(uint32_t addr,Access_type mode)
@@ -352,7 +472,7 @@ uint32_t Mem::read_mem(uint32_t addr,Access_type mode)
     else if(addr < 0x03000000) v = read_board_wram(addr,mode);
     else if(addr < 0x04000000) v = read_chip_wram(addr,mode);
     else if(addr < 0x05000000) v = read_io(addr,mode);
-    else if(addr < 0x06000000) v = read_obj_ram(addr,mode);
+    else if(addr < 0x06000000) v = read_pal_ram(addr,mode);
     else if(addr < 0x06018000) v = read_vram(addr,mode);
     else if(addr < 0x07000000) { mem_region = UNDEFINED; return 0; }
     else if(addr < 0x08000000) v = read_oam(addr,mode);
@@ -406,7 +526,7 @@ void Mem::write_mem(uint32_t addr,uint32_t v,Access_type mode)
     else if(addr < 0x03000000) write_board_wram(addr,v,mode);
     else if(addr < 0x04000000) write_chip_wram(addr,v,mode);
     else if(addr < 0x05000000) write_io(addr,v,mode);
-    else if(addr < 0x06000000) write_obj_ram(addr,v,mode);
+    else if(addr < 0x06000000) write_pal_ram(addr,v,mode);
     else if(addr < 0x06018000) write_vram(addr,v,mode);
     else if(addr < 0x07000000) { mem_region = UNDEFINED; return; }
     else if(addr < 0x08000000) write_oam(addr,v,mode);
@@ -465,14 +585,28 @@ void Mem::write_external(uint32_t addr,uint32_t v,Access_type mode)
             }
         }
     }
-    printf("write_external fell through %08x\n",addr);
+    printf("write_external fell through %08x:%08x\n",addr,cpu->get_pc());
     exit(1);    
 }
 
 //access handler for reads (for non io mapped mem)
 // need checks for endianess here for completeness
-inline void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access_type mode)
+void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access_type mode)
 {
+
+#ifdef DEBUG // bounds check the memory access
+
+    uint32_t sz = access_sizes[mode];
+
+
+    if(buf.size() < addr + sz)
+    {
+        printf("out of range handle write at: %08x\n",cpu->get_pc());
+        exit(1);
+    }
+#endif
+
+
     switch(mode)
     {
         case BYTE:
@@ -498,22 +632,49 @@ inline void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v
 }
 
 
+// this definitely needs to be cleaned up!
 void Mem::write_io_regs(uint32_t addr,uint8_t v)
 {
+    addr &= IO_MASK;
+
+
+    // unused areas (once we have the full map)
+    // we can just make this be ignored in the default case!
+    if(addr > 0x208 && addr < 0x300)
+    {
+        return;
+    }
+
+
     switch(addr)
     {
 
-
         case IO_DISPCNT:
         {
+            /*
+            // enter forced blank
+            if(!is_set(io[addr],7) && is_set(v,7))
+            {
+                puts("entering forced blank!");
+                disp->set_cycles(0);
+                disp->set_mode(VBLANK);
+            }
+
+            // leaving forced blank
+            else if(is_set(io[addr],7) && !is_set(v,7))
+            {
+                disp->set_mode(VISIBLE);
+            }
+            */
+
             // gba / cgb mode is reserved
-            io[addr&IO_MASK] = v & ~8;
+            io[addr] = v & ~8;
             break;
         }
 
         case IO_DISPCNT+1:
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
@@ -534,17 +695,18 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         {
             // first 3 bits read only
             // 6 and 7 are unused
-            io[addr&IO_MASK] = v & ~0xc3;
+            io[addr] = v & ~0xc3;
             break;
         }
 
         
         case IO_DISPSTAT+1: // vcount (lyc)
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
+        // read only!
         case IO_VCOUNT: // (ly)
         case IO_VCOUNT+1:
         {
@@ -556,30 +718,465 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         case IO_BG0CNT:
         case IO_BG0CNT+1:
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
         case IO_BG1CNT:
         case IO_BG1CNT+1:
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
         case IO_BG2CNT:
         case IO_BG2CNT+1:
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
 
         case IO_BG3CNT:
         case IO_BG3CNT+1:
         {
-            io[addr&IO_MASK] = v;
+            io[addr] = v;
             break;
         }
+
+
+        // all backgrounds function the same so we will group them
+
+        case IO_BG0HOFS: // write only
+        case IO_BG1HOFS:
+        case IO_BG2HOFS:
+        case IO_BG3HOFS:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // only 1st bit used
+        case IO_BG0HOFS+1:
+        case IO_BG1HOFS+1:
+        case IO_BG2HOFS+1:
+        case IO_BG3HOFS+1:
+        {
+            io[addr] = v & 1;
+            break;
+        }
+
+
+        case IO_BG0VOFS: // write only
+        case IO_BG1VOFS:
+        case IO_BG2VOFS:
+        case IO_BG3VOFS:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // only 1st bit used
+        case IO_BG0VOFS+1:
+        case IO_BG1VOFS+1:
+        case IO_BG2VOFS+1:
+        case IO_BG3VOFS+1:
+        {
+            io[addr] = v & 1;
+            break;
+        }
+
+
+
+
+        // both have full write
+        // bg2 scaling param X
+        case IO_BG2PA:
+        case IO_BG2PA+1:
+        case IO_BG2PB:
+        case IO_BG2PB+1:
+        case IO_BG2PC:
+        case IO_BG2PC+1:
+        case IO_BG2PD:
+        case IO_BG2PD+1:                        
+        {
+            io[addr] = v;
+            break;
+        }
+
+
+
+
+        // both have full write
+        // bg3 scaling param X
+        case IO_BG3PA:
+        case IO_BG3PA+1:
+        case IO_BG3PB:
+        case IO_BG3PB+1:
+        case IO_BG3PC:
+        case IO_BG3PC+1:
+        case IO_BG3PD:
+        case IO_BG3PD+1:                        
+        {
+            io[addr] = v;
+            break;
+        }
+
+
+
+
+        // background 2 reference point registers
+        // on write these copy to internal regs
+        case IO_BG2X_L:
+        case IO_BG2X_L+1:
+        case IO_BG2Y_L:
+        case IO_BG2Y_L+1:
+        case IO_BG2X_H:
+        case IO_BG2Y_H:                        
+        {
+            io[addr] = v;
+            disp->load_reference_point_regs();
+            break;
+        }
+
+        case IO_BG2X_H+1:
+        case IO_BG2Y_H+1:        
+        {
+            io[addr] = v & ~0xf0;
+            disp->load_reference_point_regs();
+            break;
+        }
+
+
+
+
+        //rightmost cord of window plus 1
+        case IO_WIN0H:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // leftmost window cord
+        case IO_WIN0H+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+
+        // DMA 0
+
+        // dma 0 source reg
+        case IO_DMA0SAD: 
+        case IO_DMA0SAD+1:
+        case IO_DMA0SAD+2:
+        case IO_DMA0SAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 0 dest reg
+        case IO_DMA0DAD: 
+        case IO_DMA0DAD+1:
+        case IO_DMA0DAD+2:
+        case IO_DMA0DAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 0 transfer len
+        case IO_DMA0CNT_L:
+        case IO_DMA0CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 0 transfer control
+        case IO_DMA0CNT_H:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 0 transfer control
+        case IO_DMA0CNT_H+1:
+        {
+            io[addr] = v;
+            if(is_set(v,7)) // transfer enabeld
+            {
+                cpu->handle_dma(Dma_type::IMMEDIATE);
+            }
+            break;
+        }
+
+
+
+
+
+
+
+        // DMA 1
+
+        // dma 1 source reg
+        case IO_DMA1SAD: 
+        case IO_DMA1SAD+1:
+        case IO_DMA1SAD+2:
+        case IO_DMA1SAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 1 dest reg
+        case IO_DMA1DAD: 
+        case IO_DMA1DAD+1:
+        case IO_DMA1DAD+2:
+        case IO_DMA1DAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 1 transfer len
+        case IO_DMA1CNT_L:
+        case IO_DMA1CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 1 transfer control
+        case IO_DMA1CNT_H:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 1 transfer control
+        case IO_DMA1CNT_H+1:
+        {
+            io[addr] = v;
+            if(is_set(v,7)) // transfer enabeld
+            {
+                cpu->handle_dma(Dma_type::IMMEDIATE);
+            }
+            break;
+        }
+
+
+
+        // DMA 2
+
+        // dma 2 source reg
+        case IO_DMA2SAD: 
+        case IO_DMA2SAD+1:
+        case IO_DMA2SAD+2:
+        case IO_DMA2SAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 2 dest reg
+        case IO_DMA2DAD: 
+        case IO_DMA2DAD+1:
+        case IO_DMA2DAD+2:
+        case IO_DMA2DAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 2 transfer len
+        case IO_DMA2CNT_L:
+        case IO_DMA2CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 2 transfer control
+        case IO_DMA2CNT_H:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 2 transfer control
+        case IO_DMA2CNT_H+1:
+        {
+            io[addr] = v;
+            if(is_set(v,7)) // transfer enabeld
+            {
+                cpu->handle_dma(Dma_type::IMMEDIATE);
+            }
+            break;
+        }
+
+
+
+        // DMA 3
+
+        // dma 3 source reg
+        case IO_DMA3SAD: 
+        case IO_DMA3SAD+1:
+        case IO_DMA3SAD+2:
+        case IO_DMA3SAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 3 dest reg
+        case IO_DMA3DAD: 
+        case IO_DMA3DAD+1:
+        case IO_DMA3DAD+2:
+        case IO_DMA3DAD+3:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 3 transfer len
+        case IO_DMA3CNT_L:
+        case IO_DMA3CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 3 transfer control
+        case IO_DMA3CNT_H:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // dma 3 transfer control
+        case IO_DMA3CNT_H+1:
+        {
+            io[addr] = v;
+            if(is_set(v,7)) // transfer enabeld
+            {
+                printf("dma started %08x\n",cpu->get_pc());
+                cpu->handle_dma(Dma_type::IMMEDIATE);
+            }
+            break;
+        }
+
+
+
+ 
+        // timer 0  reload value
+        case IO_TM0CNT_L:
+        case IO_TM0CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // timer 0 control
+        case IO_TM0CNT_H:
+        {
+            io[addr] = v;
+            if(is_set(v,7))
+            {
+                // reload the timer
+                cpu->set_timer(0,handle_read(io,IO_TM0CNT_L,HALF));
+                break;
+            }
+            break;
+        } 
+
+        // unused
+        case IO_TM0CNT_H+1:
+        {
+            break;
+        }
+
+
+        // timer 1  reload value
+        case IO_TM1CNT_L:
+        case IO_TM1CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // timer 1 control
+        case IO_TM1CNT_H:
+        {
+            io[addr] = v;
+            if(is_set(v,7))
+            {
+                cpu->set_timer(1,handle_read(io,IO_TM1CNT_L,HALF));
+            }
+            break;
+        } 
+
+        // unused
+        case IO_TM1CNT_H+1:
+        {
+            break;
+        }
+
+
+
+
+        // timer 2  reload value
+        case IO_TM2CNT_L:
+        case IO_TM2CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // timer 2 control
+        case IO_TM2CNT_H:
+        {
+            io[addr] = v;
+            if(is_set(v,7))
+            {
+                cpu->set_timer(2,handle_read(io,IO_TM2CNT_L,HALF));
+            }
+            break;
+        } 
+
+        // unused
+        case IO_TM2CNT_H+1:
+        {
+            break;
+        }
+
+
+        // timer 3  reload value
+        case IO_TM3CNT_L:
+        case IO_TM3CNT_L+1:
+        {
+            io[addr] = v;
+            break;
+        }
+
+        // timer 3 control
+        case IO_TM3CNT_H:
+        {
+            io[addr] = v;
+            if(is_set(v,7))
+            {
+                cpu->set_timer(3,handle_read(io,IO_TM3CNT_L,HALF));
+            }
+            break;
+        } 
+
+        // unused
+        case IO_TM3CNT_H+1:
+        {
+            break;
+        }
+
 
 
         case IO_IME: // 0th bit toggles ime
@@ -592,20 +1189,73 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
             break; // do nothing
         }
 
-        //unused
-        case 0x400020A: 
-        case 0x400020B:
-        { 
+
+        case IO_IE: // interrupt enable
+        {
+            io[addr] = v;
+            break;
+        }
+
+        case IO_IE+1:
+        {
+            io[addr] = v & ~0xc0;
+            break;
+        }
+
+        case IO_IF: // interrupt flag writing a 1 desets the bit
+        {
+            io[addr] &= ~v;
+            break;
+        }
+
+        case IO_IF+1:
+        {
+            io[addr] &= ~(v & ~0xc0);
+            break;
+        }
+
+        case IO_WAITCNT: // configures game pak access times
+        {
+            io[addr] = v;
+            break;
+        }
+
+        case IO_WAITCNT+1: 
+        {
+            io[addr] = v & ~0x20;
+            break;
+        }        
+
+        
+        case IO_WAITCNT+2: // top half not used
+        case IO_WAITCNT+3: 
+        {
             break;
         }
 
 
 
+        //unused
+        case 0x400020A&IO_MASK: 
+        case 0x400020B&IO_MASK:
+        { 
+            break;
+        }
+
+        // gba bios inits this to one to know its not in initial boot 
+        case IO_POSTFLG:
+        {
+            io[addr] = v & 1;
+            break;
+        }
+
+
 
         default:
         {    
-            printf("unknown io reg write at %08x\n",addr);
-            exit(1);
+            //printf("unknown io reg write at %08x:%08x\n",addr,cpu->get_pc());
+            io[addr] = v; // get this done fast <--- fix later
+            //exit(1);
         }
     }
 }
@@ -656,14 +1306,14 @@ void Mem::write_vram(uint32_t addr,uint32_t v,Access_type mode)
 {
     mem_region = VRAM;
     //vram[addr-0x06000000] = v;
-    handle_write(vram,addr-0x06000000,v,mode);
+    handle_write(vram,addr-0x06000000,v,mode); 
 }
 
-void Mem::write_obj_ram(uint32_t addr,uint32_t v,Access_type mode)
+void Mem::write_pal_ram(uint32_t addr,uint32_t v,Access_type mode)
 {
-    mem_region = BG;
-    //bg_ram[addr & 0x3ff] = v;
-    handle_write(bg_ram,addr&0x3ff,v,mode);
+    mem_region = PAL;
+    //pal_ram[addr & 0x3ff] = v;
+    handle_write(pal_ram,addr&0x3ff,v,mode);
 }
 
 void Mem::write_board_wram(uint32_t addr,uint32_t v,Access_type mode)

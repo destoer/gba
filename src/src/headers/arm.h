@@ -8,10 +8,18 @@ enum Cpu_mode
     IRQ, UNDEFINED, USER, SYSTEM
 };
 
+
+
+constexpr int ARM_WORD_SIZE = 4; 
+constexpr int ARM_HALF_SIZE = 2;
+
 enum Access_type
 {
     BYTE = 0,HALF,WORD
 };
+
+constexpr uint32_t access_sizes[3] = {1,ARM_HALF_SIZE,ARM_WORD_SIZE};
+
 
 enum Shift_type
 {
@@ -35,13 +43,12 @@ constexpr int SP = 13; // stack pointer
 constexpr int LR = 14; // return address (link register)
 constexpr int PC = 15; // program counter
 
-constexpr int ARM_WORD_SIZE = 4; 
-constexpr int ARM_HALF_SIZE = 2;
+
 
 // register names
 extern const char *user_regs_names[16];
 
-extern const char *fiq_banked_names[6];
+extern const char *fiq_banked_names[5];
 
 extern const char *hi_banked_names[5][2];
 
@@ -84,31 +91,30 @@ inline uint8_t get_thumb_opcode_bits(uint16_t instr)
 // by a shift value * 2
 inline uint32_t get_arm_operand2_imm(uint32_t opcode)
 {
-    int imm = opcode & 0xff;
+    uint8_t imm = opcode & 0xff;
     const int shift = (opcode >> 8) & 0xf;
-    imm = rotr(imm,shift*2);
-    return imm;    
+    return rotr(imm,shift*2);   
 }
 
-inline Cpu_mode cpu_mode_from_bits(int v)
+
+inline uint32_t get_cpsr_mode_bits(Cpu_mode mode)
 {
-    switch(v)
+    switch(mode)
     {
-        case 0b10000: return USER;
-        case 0b10001: return FIQ;
-        case 0b10010: return IRQ;
-        case 0b10011: return SUPERVISOR;
-        case 0b10111: return ABORT;
-        case 0b11011: return UNDEFINED;
-        case 0b11111: return SYSTEM;
+        case USER: return 0b10000;
+        case FIQ: return 0b10001;
+        case IRQ: return 0b10010; 
+        case SUPERVISOR: return 0b10011;
+        case ABORT: return 0b10111;
+        case UNDEFINED: return 0b11011;
+        case SYSTEM: return 0b11111;
         default:
         { 
-            printf("unknown mode from bits: %08x\n",v);
+            printf("unknown mode for cpsr flag: %08x\n",mode);
             exit(1);
-        }
-    }
+        }        
+    }    
 }
-
 
 
 // TODO these aint handling edge cases
@@ -211,10 +217,9 @@ inline uint32_t ror(uint32_t v, uint32_t n, bool &carry,bool immediate)
         return v;
     }
 
-
-    carry = is_set(v,n-1);
-
-    return rotr(v,n);
+    v = rotr(v,n-1);
+    carry = is_set(v,0);
+    return rotr(v,1);
 }
 
 // barrel shifter

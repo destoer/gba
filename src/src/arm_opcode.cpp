@@ -75,7 +75,7 @@ void Cpu::exec_arm()
 void Cpu::arm_unknown(uint32_t opcode)
 {
     uint32_t op = ((opcode >> 4) & 0xf) | ((opcode >> 16) & 0xff0);
-    printf("[cpu-arm]unknown opcode %08x:%08x\n",opcode,op);
+    printf("[cpu-arm %08x]unknown opcode %08x:%08x\n",regs[PC],opcode,op);
     print_regs();
     exit(1);
 }
@@ -222,22 +222,26 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
     int rlist = opcode & 0xffff;
 
 
-    if(s)
-    {
-        printf("arm block data transfer unhandled s flag: %08x\n",regs[PC]);
-        exit(1);
-    }
 
     uint32_t addr = regs[rn];
+    uint32_t old_base = regs[rn];
     int n = 0;
 
-    for(int i = 0; i < 16; i++)
+   
+    int first = 0;
+    // do in reverse order so we can pull
+    // the first item without doing something jank
+    for(int i = 15; i >= 0; i--)
     {
         if(is_set(rlist,i))
         {
+            first = i;
             n++;
         }
     }
+
+    bool has_pc = is_set(rlist,PC);
+    n = has_pc? n+1 : n;
 
     // allways adding on address so if  we are in "down mode"
     // we need to precalc the buttom1
@@ -254,10 +258,31 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
     }
 
 
+    Cpu_mode old_mode = cpu_mode;
+    bool changed_mode = false;
+    if(s)
+    {
+
+        if(l && has_pc) // cpsr = spsr
+        {
+            if(cpu_mode < USER)  // not in user or system mode
+            {
+                set_cpsr(status_banked[cpu_mode]);
+            }
+        }
+
+        else // no r15 or load uses different mode
+        {
+            changed_mode = true;
+            switch_mode(USER);
+        }
+    }
 
 
 
-    for(int i = 0; i < 16; i++)
+
+
+    for(int i = first; i < 16; i++)
     {
         if(!is_set(rlist,i))
         {
@@ -272,12 +297,28 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
 
         if(l) // load
         {
+            // no writeback if base
+            if(i == rn)
+            {
+               w = false;
+            }
+
             regs[i] = mem->read_memt(addr,WORD);
         }
 
         else // store
         {
-            mem->write_memt(addr,regs[i],WORD);
+            // if base is is fire entry
+            // store old base
+            if(rn == i && i == first)
+            {
+                mem->write_memt(addr,old_base,WORD);
+            }
+
+            else
+            {
+                mem->write_memt(addr,regs[i],WORD);
+            }
         }
 
         if(!p)
@@ -314,6 +355,14 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
         //n-1S +2n
         cycle_tick(n+1);
     }
+
+
+    // restore the correct mode!
+    if(changed_mode)
+    {
+        switch_mode(old_mode);
+    }
+
 }
 
 
@@ -366,6 +415,12 @@ void Cpu::arm_psr(uint32_t opcode)
         if(is_set(opcode,16)) mask |= 0x000000ff;
 
 
+        if(cpu_mode == USER) // only flags can be changed in user mode
+        {
+            mask = 0xf0000000;
+        }
+
+
         uint32_t v;
 
         if(is_imm)
@@ -385,20 +440,11 @@ void Cpu::arm_psr(uint32_t opcode)
         // only write specifed bits
         v &= mask;
         
-
-        if(mask & 0xff) // writes to mode bits?
-        {
-            // mode switch if mode bits are overwritten
-            // 0:4 (arm has different values to us for it)
-            switch_mode(cpu_mode_from_bits(v & 0x1f));
-        }
-
-
         // all bits in mask should be deset
         // and then the value ored
         if(!spsr) // cpsr
         {
-            cpsr = (cpsr & ~mask) | v;
+            set_cpsr((cpsr & ~mask) | v);
         }
 
         else // spsr
@@ -407,7 +453,7 @@ void Cpu::arm_psr(uint32_t opcode)
         }
     }
 
-    // psr
+    // mrs
     else
     {
         int rd = (opcode >> 12) & 0xf;
@@ -488,18 +534,12 @@ void Cpu::arm_data_processing(uint32_t opcode)
     {
         // how to calc the carry?
         const int imm = opcode & 0xff;
-        const int shift = (opcode >> 8) & 0xf;
+        const int shift = ((opcode >> 8) & 0xf)*2;
 
-        if(shift != 0)
-        {
-            shift_carry = is_set(imm,shift-1);
-            op2 = rotr(imm,shift*2);
-        }
+        shift_carry = is_set(imm,shift-1);
 
-        else 
-        {
-            op2 = imm;
-        }    
+        // is this immediate?
+        op2 = rotr(imm,shift);
     }
 
     else // shifted register 
@@ -557,11 +597,24 @@ void Cpu::arm_data_processing(uint32_t opcode)
         cycles += 2;
     }
 
-   
 
+    if(update_flags && rd == PC)
+    {
+        if(cpu_mode >= USER)
+        {
+            printf("illegal data processing s with pc %08x\n",regs[PC]);
+            exit(1);
+        }
+        
+        else
+        {
+            set_cpsr(status_banked[cpu_mode]);
+        }
+    }
     
     // switch on the opcode to decide what to do
-    switch((opcode >> 21) & 0xf)
+    int op = (opcode >> 21) & 0xf;
+    switch(op)
     {
         case 0x0: //and
         {
@@ -586,6 +639,12 @@ void Cpu::arm_data_processing(uint32_t opcode)
         case 0x2: // sub
         {
             regs[rd] = sub(op1,op2,update_flags);
+            break;
+        }
+
+        case 0x3: // rsb
+        {
+            regs[rd] = sub(op2,op1,update_flags);
             break;
         }
 
@@ -617,6 +676,21 @@ void Cpu::arm_data_processing(uint32_t opcode)
         case 0x8: // tst (and without writeback)
         {
             logical_and(op1,op2,update_flags);
+            if(update_flags)
+            {
+                cpsr = shift_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            }             
+            break;
+        }
+
+
+        case 0x9: // teq
+        {
+            logical_eor(op1,op2,update_flags);
+            if(update_flags)
+            {
+                cpsr = shift_carry? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            }            
             break;
         }
 
@@ -683,7 +757,7 @@ void Cpu::arm_data_processing(uint32_t opcode)
 
         default:
         {
-            puts("cpu unknown data processing instruction!");
+            printf("cpu unknown data processing instruction %x!\n",op);
             arm_unknown(opcode);
             break;
         }
@@ -703,6 +777,8 @@ void Cpu::arm_branch_and_exchange(uint32_t opcode)
     // if bit 0 of rn is a 1
     // subsequent instrs decoded as thumb
     is_thumb = regs[rn] & 1;
+
+    cpsr = is_thumb? set_bit(cpsr,5) : deset_bit(cpsr,5);
 
     // branch
     regs[PC] = regs[rn] & ~1;
@@ -959,7 +1035,7 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
             v += 8;
         }
 
-        mem->write_mem(addr,v,mode);
+        mem->write_memt(addr,v,mode);
 
         cycles = 2; // 2 N cycles for a store 
 

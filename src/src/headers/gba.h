@@ -4,7 +4,7 @@
 #include "disass.h"
 #include "display.h"
 #include "debugger.h"
-#include <SDL2/SDL.h>
+
 
 class GBA
 {
@@ -51,3 +51,4 @@ private:
 	SDL_Texture * texture;
     uint32_t next_time;
 };
+

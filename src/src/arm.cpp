@@ -1,3 +1,6 @@
+#include "headers/arm.h"
+
+
 // register names
 const char *user_regs_names[16] = 
 {

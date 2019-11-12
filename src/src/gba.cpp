@@ -3,9 +3,9 @@
 // init all sup compenents
 GBA::GBA(std::string filename)
 {
-    mem.init(filename,&debug,&cpu);
+    mem.init(filename,&debug,&cpu,&disp);
     disass.init(&mem,&cpu);
-    disp.init(&mem);
+    disp.init(&mem,&cpu);
     cpu.init(&disp,&mem,&debug,&disass);
     debug.init(&mem,&cpu,&disp,&disass);
 
@@ -25,7 +25,7 @@ GBA::~GBA()
 
 
 
-uint32_t time_left(const uint32_t &next_time)
+uint32_t time_left(uint32_t &next_time)
 {	
 	uint32_t now = SDL_GetTicks();
 	if(next_time <= now)
@@ -46,11 +46,15 @@ void GBA::run()
 
 	const int fps = 60;
 	const int screen_ticks_per_frame = 1000 / fps; 
-    uint32_t next_time;
+	std::vector<int>fps_table (10);
+	int fps_table_idx = 0;
+
     for(;;)
     {
 
-        next_time = SDL_GetTicks() + screen_ticks_per_frame;
+		uint32_t curr_time = SDL_GetTicks();
+
+        next_time = curr_time + screen_ticks_per_frame;
 
         handle_input();
 
@@ -72,10 +76,23 @@ void GBA::run()
 		// probably a bad way to do it	
 		// need to count the ammount of cycles in a frame instead
 		// but cut the screen copy off at the vblank point	
-        //SDL_Delay(time_left(next_time));
+        SDL_Delay(time_left(next_time));
 
 
-        next_time += screen_ticks_per_frame;
+		// fps calc
+		int curr_fps = 1000 / (SDL_GetTicks() - curr_time);
+		fps_table[fps_table_idx++] = curr_fps;
+		if(fps_table_idx == 10)
+		{
+			fps_table_idx = 0;
+
+			int avg_fps = std::accumulate(fps_table.begin(),
+				fps_table.end(),0) / fps_table.size();
+			
+			std::string title = fmt::format("destoer-gba fps: {}",avg_fps);
+
+			SDL_SetWindowTitle(window,title.data());
+		}	
     }
 }
 
@@ -84,7 +101,7 @@ void GBA::init_screen()
 	/* sdl setup */
 	
 	// initialize our window
-	window = SDL_CreateWindow("gba",
+	window = SDL_CreateWindow("",
 		SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,disp.X*2,disp.Y*2,SDL_WINDOW_RESIZABLE);
 	
 	SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl"); // crashes without this on windows?
@@ -97,6 +114,7 @@ void GBA::init_screen()
 
 	memset(disp.screen ,0x00,disp.Y * disp.X *  4 * sizeof(uint8_t));	
 }
+
 
 void GBA::handle_input()
 {
@@ -127,7 +145,6 @@ void GBA::handle_input()
 			{
 				switch(event.key.keysym.sym)
 				{
-
 #ifdef DEBUG
 					case SDLK_p:
 					{
@@ -135,8 +152,6 @@ void GBA::handle_input()
 						break;
 					}
 #endif
-
-
 					case SDLK_RETURN:
 					{
 						button_event(Button::START,true);
@@ -271,8 +286,6 @@ void GBA::handle_input()
 // for io after the test 
 void GBA::button_event(Button b, bool down)
 {
-
-
 	uint16_t keyinput = mem.handle_read(mem.io,IO_KEYINPUT&IO_MASK,HALF);
 
 	int button = static_cast<int>(b);

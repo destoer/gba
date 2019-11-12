@@ -36,11 +36,74 @@ void Cpu::thumb_unknown(uint16_t opcode)
     exit(1);
 }
 
+
+void Cpu::thumb_load_store_sp(uint16_t opcode)
+{
+    uint8_t nn = (opcode & 0xff) * 4;
+    int rd = (opcode >> 8) & 0x7;
+    bool l = is_set(opcode,11);
+
+    uint32_t addr = regs[SP] + nn;
+
+    if(l)
+    {
+        regs[rd] = mem->read_memt(addr,WORD);
+        regs[rd] = rotr(regs[rd],(addr&3)*8);
+        cycle_tick(3); // 1s + 1n + 1i for ldr        
+    }
+
+    else
+    {
+        mem->write_memt(addr,regs[rd],WORD);
+        cycle_tick(2); // 2s for str
+    }
+
+}
+
+
+void Cpu::thumb_sp_add(uint16_t opcode)
+{
+    bool u = !is_set(opcode,7);
+    int nn = (opcode & 127) * 4;
+
+    regs[SP] += u? nn : -nn;
+
+    cycle_tick(1); // 1 s cycle    
+}
+
+// start here
+// software interrupt (figure out interrupt vectors and what damb mode it swaps too)
+// ^ not sure im reading from the right place for the vector table
+void Cpu::thumb_swi(uint16_t opcode)
+{
+    // do we even do anything with nn!?
+    UNUSED(opcode);
+
+    // spsr for supervisor = cpsr
+    status_banked[SUPERVISOR] = cpsr;
+
+    // lr in supervisor mode set to return addr
+    hi_banked[SUPERVISOR][1] = regs[PC];
+
+    // supervisor mode switch
+    switch_mode(SUPERVISOR);
+
+    
+    // switch to arm mode
+    is_thumb = false; // switch to arm mode
+    cpsr = deset_bit(cpsr,5); // toggle thumb in cpsr
+    cpsr = set_bit(cpsr,7); //set the irq bit to mask interrupts
+
+    // branch to interrupt vector
+    regs[PC] = 0x8;
+    cycle_tick(3); // 2s + 1n;
+}
+
 void Cpu::thumb_get_rel_addr(uint16_t opcode)
 {
     uint32_t offset = (opcode & 0xff) * 4;
     int rd = (opcode >> 8) & 0x7;
-    bool pc = is_set(opcode,11);
+    bool pc = !is_set(opcode,11);
 
     if(pc)
     {
@@ -133,6 +196,7 @@ void Cpu::thumb_load_store_reg(uint16_t opcode)
         case 2: // ldr
         {
             regs[rd] = mem->read_memt(addr,WORD);
+            regs[rd] = rotr(regs[rd],(addr&3)*8);
             cycle_tick(3); // 1s + 1n + 1i for ldr
             break;
         }
@@ -294,7 +358,7 @@ void Cpu::thumb_hi_reg_ops(uint16_t opcode)
     {
         case 0b00: // add
         {
-            regs[rd] += rs_val;
+            regs[rd] = add(regs[rd],rs_val,false);
             break;  
         }
 
@@ -316,6 +380,9 @@ void Cpu::thumb_hi_reg_ops(uint16_t opcode)
             // if bit 0 of rn is a 1
             // subsequent instrs decoded as thumb
             is_thumb = rs_val & 1;
+
+            // set the thumb bit
+            cpsr = is_thumb? set_bit(cpsr,5) : deset_bit(cpsr,5);
 
             // branch
             regs[PC] = rs_val & ~1;
@@ -363,6 +430,34 @@ void Cpu::thumb_alu(uint16_t opcode)
             break;
         }
 
+        case 0x3: // lsr 
+        {
+            bool c = is_set(cpsr,C_BIT);
+            regs[rd] = barrel_shift(LSR,regs[rd],regs[rs]&0xff,c,false);
+            set_nz_flag(regs[rd]);
+            cpsr = c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
+            cycle_tick(2); // 1s + 1i
+            break;            
+        }
+
+        case 0x4: // asr
+        {
+            bool c = is_set(cpsr,C_BIT);
+            regs[rd] = barrel_shift(ASR,regs[rd],regs[rs]&0xff,c,false);
+            set_nz_flag(regs[rd]);
+            cpsr = c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);   
+            cycle_tick(2); // 1s + 1i
+            break;         
+        }
+
+
+        case 0x6: // sbc
+        {
+            regs[rd] = sbc(regs[rd],regs[rs],true);
+            break;
+        }
+
+        
         case 0xe: // bic
         {
             regs[rd] &= ~regs[rs];
@@ -398,7 +493,7 @@ void Cpu::thumb_alu(uint16_t opcode)
 
         case 0xa: // cmp
         {
-            sub(regs[rs],regs[rs],true);
+            sub(regs[rd],regs[rs],true);
             break;
         }
 
@@ -504,7 +599,9 @@ void Cpu::thumb_ldst_imm(uint16_t opcode)
 
         case 0b01: // ldr
         {
-            regs[rd] = mem->read_memt((regs[rb]+imm*4),WORD);
+            uint32_t addr = regs[rb]+imm*4;
+            regs[rd] = mem->read_memt(addr,WORD);
+            regs[rd] = rotr(regs[rd],(addr&3)*8);
             cycle_tick(3);
             break;            
         }
@@ -670,7 +767,6 @@ void Cpu::thumb_cond_branch(uint16_t opcode)
     int8_t offset = opcode & 0xff;
     uint32_t addr = (regs[PC]+2) + offset*2;
     int cond = (opcode >> 8) & 0xf;
-
 
     // if branch taken 2s +1n cycles
     if(cond_met(cond))

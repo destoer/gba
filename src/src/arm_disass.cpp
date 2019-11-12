@@ -511,6 +511,12 @@ std::string Disass::disass_arm_data_processing(uint32_t opcode)
             break;            
         }
 
+        case 0x3: // rsb
+        {
+            return fmt::format("rsb{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
+            break;            
+        }        
+
         case 0x4: // add
         {
             return fmt::format("add{} {},{},{}",suffix,user_regs_names[rd],user_regs_names[rn],operand2);
@@ -538,6 +544,12 @@ std::string Disass::disass_arm_data_processing(uint32_t opcode)
         case 0x8: // tst
         {
             return fmt::format("tst{} {},{}",suffix,user_regs_names[rn],operand2);
+            break;
+        }
+
+        case 0x9: // teq
+        {
+            return fmt::format("teq{} {},{}",suffix,user_regs_names[rn],operand2);
             break;
         }
 
