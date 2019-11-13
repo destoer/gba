@@ -24,13 +24,13 @@ void Disass::init_thumb_disass_table()
         // THUMB.11: load/store SP-relative
         if(((i >> 4) & 0b1111) == 0b1001)
         {
-            disass_thumb_table[i] = disass_thumb_load_store_sp;
+            disass_thumb_table[i] = &Disass::disass_thumb_load_store_sp;
         }
 
         // THUMB.13: add offset to stack pointer
         else if(i == 0b10110000)
         {
-            disass_thumb_table[i] = disass_thumb_sp_add;
+            disass_thumb_table[i] = &Disass::disass_thumb_sp_add;
         }
 
 
@@ -38,112 +38,112 @@ void Disass::init_thumb_disass_table()
         // THUMB.17: software interrupt and breakpoint
         else if(i  == 0b11011111)
         {
-            disass_thumb_table[i] = disass_thumb_swi;
+            disass_thumb_table[i] = &Disass::disass_thumb_swi;
         }
 
 
         // THUMB.7: load/store with register offset
         else if(((i >> 4) & 0b1111) == 0b0101 && !is_set(i,1))
         {
-            disass_thumb_table[i] = disass_thumb_load_store_reg;
+            disass_thumb_table[i] = &Disass::disass_thumb_load_store_reg;
         }
 
         // THUMB.12: get relative address
         else if(((i >> 4) & 0b1111) == 0b1010)
         {
-            disass_thumb_table[i] = disass_thumb_get_rel_addr;
+            disass_thumb_table[i] = &Disass::disass_thumb_get_rel_addr;
         }
         
         // THUMB.18: unconditional branch
         else if(((i >> 3) & 0b11111) == 0b11100)
         {
-            disass_thumb_table[i] = disass_thumb_branch;
+            disass_thumb_table[i] = &Disass::disass_thumb_branch;
         }
 
         //THUMB.10: load/store halfword
         else if(((i >> 4) & 0b1111) == 0b1000)
         {
-            disass_thumb_table[i] = disass_thumb_load_store_half;
+            disass_thumb_table[i] = &Disass::disass_thumb_load_store_half;
         }
 
         // THUMB.8: load/store sign-extended byte/halfword
         else if(((i >> 4) & 0b1111) == 0b0101 && is_set(i,1))
         {
-            disass_thumb_table[i] = disass_thumb_load_store_sbh;
+            disass_thumb_table[i] = &Disass::disass_thumb_load_store_sbh;
         }
 
         //THUMB.14: push/pop registers
         else if(((i >> 4) & 0b1111) == 0b1011 
             && ((i >> 1) & 0b11) == 0b10)
         {
-            disass_thumb_table[i] = disass_thumb_push_pop;
+            disass_thumb_table[i] = &Disass::disass_thumb_push_pop;
         }
 
         // THUMB.9: load/store with immediate offset
         else if(((i>>5) & 0b111) == 0b011)
         {
-            disass_thumb_table[i] = disass_thumb_ldst_imm;
+            disass_thumb_table[i] = &Disass::disass_thumb_ldst_imm;
         }
 
         // THUMB.5: Hi register operations/branch exchange
         else if(((i >> 2) & 0b111111) == 0b010001)
         {
-            disass_thumb_table[i] = disass_thumb_hi_reg_ops;
+            disass_thumb_table[i] = &Disass::disass_thumb_hi_reg_ops;
         }
 
 
         //  THUMB.15: multiple load/store
         else if(((i >> 4) & 0b1111) == 0b1100)
         {
-            disass_thumb_table[i] = disass_thumb_multiple_load_store;
+            disass_thumb_table[i] = &Disass::disass_thumb_multiple_load_store;
         }
 
         // THUMB.2: add/subtract
         else if(((i >> 3) & 0b11111) == 0b00011)
         {
-            disass_thumb_table[i] = disass_thumb_add_sub;
+            disass_thumb_table[i] = &Disass::disass_thumb_add_sub;
         }
 
         // THUMB.4: ALU operations
         else if(((i >> 2) & 0b111111) == 0b010000)
         {
-            disass_thumb_table[i] = disass_thumb_alu;
+            disass_thumb_table[i] = &Disass::disass_thumb_alu;
         }
 
         // THUMB.19: long branch with link
         else if(((i >> 4) & 0b1111) == 0b1111)
         {
-            disass_thumb_table[i] = disass_thumb_long_bl;
+            disass_thumb_table[i] = &Disass::disass_thumb_long_bl;
         }
 
         // THUMB.6: load PC-relative
         else if(((i >> 3) & 0b11111) ==  0b01001)
         {
-            disass_thumb_table[i] = disass_thumb_ldr_pc;
+            disass_thumb_table[i] = &Disass::disass_thumb_ldr_pc;
         }
 
         // THUMB.3: move/compare/add/subtract immediate
         else if(((i >> 5) & 0b111) == 0b001)
         {
-            disass_thumb_table[i] = disass_thumb_mcas_imm;
+            disass_thumb_table[i] = &Disass::disass_thumb_mcas_imm;
         }
 
         // THUMB.1: move shifted register
         // top 3 bits unset
         else if(((i >> 5) & 0b111) == 0b000)
         {
-            disass_thumb_table[i] = disass_thumb_mov_reg_shift;
+            disass_thumb_table[i] = &Disass::disass_thumb_mov_reg_shift;
         }
 
         // THUMB.16: conditional branch
         else if(((i >> 4)  & 0b1111) == 0b1101)
         {
-            disass_thumb_table[i] = disass_thumb_cond_branch;
+            disass_thumb_table[i] = &Disass::disass_thumb_cond_branch;
         }
 
         else 
         {
-            disass_thumb_table[i] = disass_thumb_unknown;
+            disass_thumb_table[i] = &Disass::disass_thumb_unknown;
         }                
     }
 }

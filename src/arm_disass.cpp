@@ -22,19 +22,19 @@ void Disass::init_arm_disass_table()
                 //  ARM.7: Multiply and Multiply-Accumulate (MUL,MLA)
                 if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b111111) == 0b000000) 
                 {
-                    disass_arm_table[i] = disass_arm_mul;
+                    disass_arm_table[i] = &Disass::disass_arm_mul;
                 }
 
                 //  multiply and accumulate long
                 else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b111111) == 0b000001) 
                 {
-                    disass_arm_table[i] = disass_arm_mull;
+                    disass_arm_table[i] = &Disass::disass_arm_mull;
                 }
 
                 // Single Data Swap (SWP)  
                  else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b11111) == 0b00010 && ((i >> 4) & 0b11) == 0b00)
                 {
-                    disass_arm_table[i] = disass_arm_swap;
+                    disass_arm_table[i] = &Disass::disass_arm_swap;
                 }
 
 
@@ -43,7 +43,7 @@ void Disass::init_arm_disass_table()
                 // (may require more stringent checks than this)
                 else if(((i >> 9) & 0b111) == 0b000 && is_set(i,3) && is_set(i,0))
                 {
-                    disass_arm_table[i] = disass_arm_hds_data_transfer;
+                    disass_arm_table[i] = &Disass::disass_arm_hds_data_transfer;
                 }
 
 
@@ -52,7 +52,7 @@ void Disass::init_arm_disass_table()
                 // bx
                 else if(i == 0b000100100001)
                 {
-                    disass_arm_table[i] = disass_arm_branch_and_exchange;
+                    disass_arm_table[i] = &Disass::disass_arm_branch_and_exchange;
                 }
 
 
@@ -64,13 +64,13 @@ void Disass::init_arm_disass_table()
                 //TST,TEQ,CMP,CMN with a S of zero
                 else if(op >= 0b1000 && op <= 0b1011 && !is_set(i,4))
                 {
-                    disass_arm_table[i] = disass_arm_psr;
+                    disass_arm_table[i] = &Disass::disass_arm_psr;
                 }
 
                 //  ARM.5: Data Processing 00 at bit 27
                 else
                 {
-                    disass_arm_table[i] = disass_arm_data_processing;
+                    disass_arm_table[i] = &Disass::disass_arm_data_processing;
                 }
                 break;
             }
@@ -80,12 +80,12 @@ void Disass::init_arm_disass_table()
                 //ARM.9: Single Data Transfer
                 if(true) // assume for now
                 {
-                    disass_arm_table[i] = disass_arm_single_data_transfer;
+                    disass_arm_table[i] = &Disass::disass_arm_single_data_transfer;
                 }
 
                 else 
                 {
-                    disass_arm_table[i] = disass_arm_unknown;
+                    disass_arm_table[i] = &Disass::disass_arm_unknown;
                 }
                 break;
             }
@@ -96,19 +96,19 @@ void Disass::init_arm_disass_table()
                 // 101 (ARM.4: Branch and Branch with Link)
                 if(is_set(i,9)) // if bit 25 set
                 {
-                    disass_arm_table[i] = disass_arm_branch;
+                    disass_arm_table[i] = &Disass::disass_arm_branch;
                 }
 
                 // 100
                 // ARM.11: Block Data Transfer (LDM,STM)
                 else if(!is_set(i,9))
                 {
-                    disass_arm_table[i] = disass_arm_block_data_transfer;
+                    disass_arm_table[i] = &Disass::disass_arm_block_data_transfer;
                 }
 
                 else 
                 {
-                    disass_arm_table[i] = disass_arm_unknown;
+                    disass_arm_table[i] = &Disass::disass_arm_unknown;
                 }
 
                 break;
@@ -116,7 +116,7 @@ void Disass::init_arm_disass_table()
 
             case 0b11:
             {
-                disass_arm_table[i] = disass_arm_unknown;
+                disass_arm_table[i] = &Disass::disass_arm_unknown;
                 break;
             }
         }        

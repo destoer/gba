@@ -42,123 +42,123 @@ void Cpu::init_thumb_opcode_table()
          // THUMB.11: load/store SP-relative
         if(((i >> 4) & 0b1111) == 0b1001)
         {
-            thumb_opcode_table[i] = thumb_load_store_sp;
+            thumb_opcode_table[i] = &Cpu::thumb_load_store_sp;
         }
 
         // THUMB.13: add offset to stack pointer
         else if(i == 0b10110000)
         {
-            thumb_opcode_table[i] = thumb_sp_add;
+            thumb_opcode_table[i] = &Cpu::thumb_sp_add;
         }
 
         // THUMB.17: software interrupt and breakpoint
         else if(i  == 0b11011111)
         {
-            thumb_opcode_table[i] = thumb_swi;
+            thumb_opcode_table[i] = &Cpu::thumb_swi;
         }
 
         // THUMB.8: load/store sign-extended byte/halfword
         else if(((i >> 4) & 0b1111) == 0b0101 && is_set(i,1))
         {
-            thumb_opcode_table[i] = thumb_load_store_sbh;
+            thumb_opcode_table[i] = &Cpu::thumb_load_store_sbh;
         }
 
         // THUMB.7: load/store with register offset
         else if(((i >> 4) & 0b1111) == 0b0101 && !is_set(i,1))
         {
-           thumb_opcode_table[i] = thumb_load_store_reg;
+           thumb_opcode_table[i] = &Cpu::thumb_load_store_reg;
         }
 
         // THUMB.12: get relative address
         else if(((i >> 4) & 0b1111) == 0b1010)
         {
-            thumb_opcode_table[i] = thumb_get_rel_addr;
+            thumb_opcode_table[i] = &Cpu::thumb_get_rel_addr;
         }
         
         // THUMB.18: unconditional branch
         else if(((i >> 3) & 0b11111) == 0b11100)
         {
-            thumb_opcode_table[i] = thumb_branch;
+            thumb_opcode_table[i] = &Cpu::thumb_branch;
         }
 
         //THUMB.10: load/store halfword
         else if(((i >> 4) & 0b1111) == 0b1000)
         {
-            thumb_opcode_table[i] = thumb_load_store_half;
+            thumb_opcode_table[i] = &Cpu::thumb_load_store_half;
         }
 
         //THUMB.14: push/pop registers
         else if(((i >> 4) & 0b1111) == 0b1011 
             && ((i >> 1) & 0b11) == 0b10)
         {
-            thumb_opcode_table[i] = thumb_push_pop;
+            thumb_opcode_table[i] = &Cpu::thumb_push_pop;
         }
 
         // THUMB.9: load/store with immediate offset
         else if(((i>>5) & 0b111) == 0b011)
         {
-            thumb_opcode_table[i] = thumb_ldst_imm;
+            thumb_opcode_table[i] = &Cpu::thumb_ldst_imm;
         }
 
 
         // THUMB.5: Hi register operations/branch exchange
         else if(((i >> 2) & 0b111111) == 0b010001)
         {
-            thumb_opcode_table[i] = thumb_hi_reg_ops;
+            thumb_opcode_table[i] = &Cpu::thumb_hi_reg_ops;
         }
 
         //  THUMB.15: multiple load/store
         else if(((i >> 4) & 0b1111) == 0b1100)
         {
-            thumb_opcode_table[i] = thumb_multiple_load_store;
+            thumb_opcode_table[i] = &Cpu::thumb_multiple_load_store;
         }
 
         // THUMB.2: add/subtract
         else if(((i >> 3) & 0b11111) == 0b00011)
         {
-            thumb_opcode_table[i] = thumb_add_sub;
+            thumb_opcode_table[i] = &Cpu::thumb_add_sub;
         }
 
         // THUMB.4: ALU operations
         else if(((i >> 2) & 0b111111) == 0b010000)
         {
-            thumb_opcode_table[i] = thumb_alu;
+            thumb_opcode_table[i] = &Cpu::thumb_alu;
         }
 
         // THUMB.19: long branch with link
         else if(((i >> 4) & 0b1111) == 0b1111)
         {
-            thumb_opcode_table[i] = thumb_long_bl;
+            thumb_opcode_table[i] = &Cpu::thumb_long_bl;
         }
 
         // THUMB.6: load PC-relative
         else if(((i >> 3) & 0b11111) ==  0b01001)
         {
-            thumb_opcode_table[i] = thumb_ldr_pc;
+            thumb_opcode_table[i] = &Cpu::thumb_ldr_pc;
         }
 
         // THUMB.3: move/compare/add/subtract immediate
         else if(((i >> 5) & 0b111) == 0b001)
         {
-            thumb_opcode_table[i] = thumb_mcas_imm;
+            thumb_opcode_table[i] = &Cpu::thumb_mcas_imm;
         }
 
         // THUMB.1: move shifted register
         // top 3 bits unset
         else if(((i >> 5) & 0b111) == 0b000)
         {
-            thumb_opcode_table[i] = thumb_mov_reg_shift;
+            thumb_opcode_table[i] = &Cpu::thumb_mov_reg_shift;
         }
 
         // THUMB.16: conditional branch
         else if(((i >> 4)  & 0b1111) == 0b1101)
         {
-            thumb_opcode_table[i] = thumb_cond_branch;
+            thumb_opcode_table[i] = &Cpu::thumb_cond_branch;
         }
 
         else 
         {
-            thumb_opcode_table[i] = thumb_unknown;
+            thumb_opcode_table[i] = &Cpu::thumb_unknown;
         }                 
     }
 }
@@ -179,20 +179,20 @@ void Cpu::init_arm_opcode_table()
                 //  ARM.7: Multiply and Multiply-Accumulate (MUL,MLA)
                 if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b111111) == 0b000000) 
                 {
-                    arm_opcode_table[i] = arm_mul;
+                    arm_opcode_table[i] = &Cpu::arm_mul;
                 }
 
                 //  multiply and accumulate long
                 else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b111111) == 0b000001) 
                 {
-                    arm_opcode_table[i] = arm_mull;
+                    arm_opcode_table[i] = &Cpu::arm_mull;
                 }
 
 
                 // Single Data Swap (SWP)  
                 else if(((i & 0b1111) == 0b1001) && ((i >> 7) & 0b11111) == 0b00010 && ((i >> 4) & 0b11) == 0b00)
                 {
-                    arm_opcode_table[i] = arm_swap;
+                    arm_opcode_table[i] = &Cpu::arm_swap;
                 }
 
 
@@ -202,7 +202,7 @@ void Cpu::init_arm_opcode_table()
                 // think this might cause conflicts?
                 else if(((i >> 9) & 0b111) == 0b000 && is_set(i,3) && is_set(i,0))
                 {
-                   arm_opcode_table[i] = arm_hds_data_transfer;
+                   arm_opcode_table[i] = &Cpu::arm_hds_data_transfer;
                 }
 
 
@@ -210,7 +210,7 @@ void Cpu::init_arm_opcode_table()
                 // bx
                 else if(i == 0b000100100001) // <--- start here
                 {
-                    arm_opcode_table[i] = arm_branch_and_exchange;
+                    arm_opcode_table[i] = &Cpu::arm_branch_and_exchange;
                 }
 
 
@@ -223,13 +223,13 @@ void Cpu::init_arm_opcode_table()
                 //TST,TEQ,CMP,CMN with a S of zero
                 else if(op >= 0b1000 && op <= 0b1011 && !is_set(i,4))
                 {
-                    arm_opcode_table[i] = arm_psr;
+                    arm_opcode_table[i] = &Cpu::arm_psr;
                 }
 
                 //  ARM.5: Data Processing 00 at bit 27
                 else
                 { 
-                    arm_opcode_table[i] = arm_data_processing;
+                    arm_opcode_table[i] = &Cpu::arm_data_processing;
                 }
                 break;
             }
@@ -239,12 +239,12 @@ void Cpu::init_arm_opcode_table()
                 //ARM.9: Single Data Transfer
                 if(true) // assume for now
                 {
-                    arm_opcode_table[i] = arm_single_data_transfer;   
+                    arm_opcode_table[i] = &Cpu::arm_single_data_transfer;   
                 }
 
                 else 
                 {
-                    arm_opcode_table[i] = arm_unknown;
+                    arm_opcode_table[i] = &Cpu::arm_unknown;
                 }
                 break;
             }
@@ -255,7 +255,7 @@ void Cpu::init_arm_opcode_table()
                 // 101 (ARM.4: Branch and Branch with Link)
                 if(is_set(i,9))
                 {
-                    arm_opcode_table[i] = arm_branch;
+                    arm_opcode_table[i] = &Cpu::arm_branch;
                 }
 
 
@@ -263,13 +263,13 @@ void Cpu::init_arm_opcode_table()
                 // ARM.11: Block Data Transfer (LDM,STM)
                 else if(!is_set(i,9))
                 {
-                    arm_opcode_table[i] = arm_block_data_transfer;
+                    arm_opcode_table[i] = &Cpu::arm_block_data_transfer;
                 }
 
 
                 else 
                 {
-                    arm_opcode_table[i] = arm_unknown;
+                    arm_opcode_table[i] = &Cpu::arm_unknown;
                 }
 
                 break;
@@ -277,7 +277,7 @@ void Cpu::init_arm_opcode_table()
 
             case 0b11:
             {
-                arm_opcode_table[i] = arm_unknown;
+                arm_opcode_table[i] = &Cpu::arm_unknown;
                 break;
             }
         } 

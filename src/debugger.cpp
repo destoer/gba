@@ -19,6 +19,7 @@ void Debugger::init(Mem *mem, Cpu *cpu, Display *disp, Disass *disass)
 
     
     tile_screen.resize(TILE_Y*TILE_X);
+    
 }
 
 
@@ -246,9 +247,6 @@ void Debugger::enter_debugger()
     // reset stepping state
     step_instr = false;
 
-    // need a write and exec command (then look into handling all the instruction variants)
-    static const std::vector<std::string> commands{"run","break","clear","step","info","disass","write","exec","pal_viewer","tile_viewer"};
-    static const std::vector<DEBUGGER_FPTR> command_funcs{run,breakpoint,clear,step,info,disass_addr,write,exec,palette_viewer,tile_viewer};
     std::string input;
 
     while(!debug_quit)

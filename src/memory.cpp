@@ -67,7 +67,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
 
     if((addr&0x1FFFFFF) > rom.size())
     {
-        printf("rom read out of range: %08x:%08x:%08x\n",addr&0x1FFFFFF,rom.size(),cpu->get_pc());
+        printf("rom read out of range: %08x:%08zx:%08x\n",addr&0x1FFFFFF,rom.size(),cpu->get_pc());
         exit(1);
     }
 

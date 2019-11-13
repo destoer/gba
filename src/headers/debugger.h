@@ -49,6 +49,15 @@ public:
     struct Breakpoint
     {
 
+
+        Breakpoint()
+        {
+            this->value = 0xdeadbeef;
+            this->addr = 0xdeadbeef;
+            this->value_enabled = false;
+            this->break_enabled = false;            
+        }
+
         void set(uint32_t value,uint32_t addr, 
             bool value_enabled,bool break_enabled)
         {
@@ -156,7 +165,9 @@ private:
 	SDL_Texture * tile_texture;
 
 
+    using DEBUGGER_FPTR = void (Debugger::*)(std::vector<std::string>);
+    std::vector<std::string> commands{"run","break","clear","step","info","disass","write","exec","pal_viewer","tile_viewer"};
+    std::vector<DEBUGGER_FPTR> command_funcs{&Debugger::run,&Debugger::breakpoint,&Debugger::clear,&Debugger::step,&Debugger::info,&Debugger::disass_addr,
+        &Debugger::write,&Debugger::exec,&Debugger::palette_viewer,&Debugger::tile_viewer};
+
 };
-
-
-using DEBUGGER_FPTR = void (Debugger::*)(std::vector<std::string>);

@@ -261,16 +261,7 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
     bool changed_mode = false;
     if(s)
     {
-
-        if(l && has_pc) // cpsr = spsr
-        {
-            if(cpu_mode < USER)  // not in user or system mode
-            {
-                set_cpsr(status_banked[cpu_mode]);
-            }
-        }
-
-        else // no r15 or load uses different mode
+        if(!has_pc && !l)// no r15 or load uses different mode
         {
             changed_mode = true;
             switch_mode(USER);
@@ -301,8 +292,21 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
             {
                w = false;
             }
-
             regs[i] = mem->read_memt(addr,WORD);
+
+            if(i == PC) // if pc is in list cpsr = spsr
+            {
+                if(cpu_mode < USER)  // not in user or system mode
+                {
+                    set_cpsr(status_banked[cpu_mode]);
+                }
+
+                else
+                {
+                    printf("[block data: %08x] illegal status bank %x\n",regs[PC],cpu_mode);
+                    exit(1);
+                }
+            }
         }
 
         else // store
@@ -447,7 +451,16 @@ void Cpu::arm_psr(uint32_t opcode)
 
         else // spsr
         {
-            status_banked[cpu_mode] = (status_banked[cpu_mode] & ~mask) | v;
+            if(cpu_mode < USER)
+            {
+                status_banked[cpu_mode] = (status_banked[cpu_mode] & ~mask) | v;
+            }
+
+            else
+            {
+                printf("[msr: %08x]Illegal spsr write %x\n",regs[PC],cpu_mode);
+                exit(1);
+            }
         }
     }
 
@@ -456,8 +469,18 @@ void Cpu::arm_psr(uint32_t opcode)
     {
         int rd = (opcode >> 12) & 0xf;
 
-        // read spsr or cpsr?
-        regs[rd] = spsr? status_banked[cpu_mode] : cpsr;
+
+        if(cpu_mode < USER)
+        {
+            // read spsr or cpsr?
+            regs[rd] = spsr? status_banked[cpu_mode] : cpsr;
+        }
+
+        else 
+        {
+            printf("[mrs: %08x]Illegal spsr read %x\n",regs[PC],cpu_mode);
+            exit(1);
+        }
 
     }
 
@@ -534,8 +557,10 @@ void Cpu::arm_data_processing(uint32_t opcode)
         const int imm = opcode & 0xff;
         const int shift = ((opcode >> 8) & 0xf)*2;
 
-        shift_carry = is_set(imm,shift-1);
-
+        if(shift != 0)
+        {
+            shift_carry = is_set(imm,shift-1);
+        }
         // is this immediate?
         op2 = rotr(imm,shift);
     }
