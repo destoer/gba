@@ -62,7 +62,7 @@ void Disass::init_arm_disass_table()
                 // bit 20 must also be zero
                 // check it ocupies the unused space for
                 //TST,TEQ,CMP,CMN with a S of zero
-                else if(op >= 0b1000 && op <= 0b1011 && !is_set(i,4))
+                else if(op >= 0x8 && op <= 0xb && !is_set(i,4))
                 {
                     disass_arm_table[i] = &Disass::disass_arm_psr;
                 }
@@ -250,7 +250,7 @@ std::string Disass::disass_arm_hds_data_transfer(uint32_t opcode)
         if(i)
         {
             uint8_t imm = opcode & 0xf;
-            imm |= (opcode >> 8) & 0xf;
+            imm |= (opcode >> 4) & 0xf0;
             addr_str = fmt::format("[{},{}#0x{:02x}]{}",user_regs_names[rn],
                 u? "" : "-",imm,w? "!" : "");
         }

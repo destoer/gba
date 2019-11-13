@@ -365,9 +365,10 @@ uint8_t Mem::read_io_regs(uint32_t addr)
 
         default:
         {    
-            printf("unknown io reg read at %08x:%08x\n",addr,cpu->get_pc());
-            cpu->print_regs();
-            exit(1);
+            //printf("unknown io reg read at %08x:%08x\n",addr,cpu->get_pc());
+            //cpu->print_regs();
+            //exit(1);
+            return io[addr];
         }
     }
 }
@@ -657,16 +658,16 @@ void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access
 
         case HALF:
         {
-           //(*(uint16_t*)(buf.data()+addr)) = v;
-           memcpy(buf.data()+addr,&v,ARM_HALF_SIZE);
-           return;
+            //(*(uint16_t*)(buf.data()+addr)) = v;
+            memcpy(buf.data()+addr,&v,ARM_HALF_SIZE);
+            return;
         }
 
         case WORD:
         {
-           //(*(uint32_t*)(buf.data()+addr)) = v;
-           memcpy(buf.data()+addr,&v,ARM_WORD_SIZE);
-           return;
+            //(*(uint32_t*)(buf.data()+addr)) = v;
+            memcpy(buf.data()+addr,&v,ARM_WORD_SIZE);
+            return;
         }
     }
     puts("Handle_write fell through!?");

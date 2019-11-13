@@ -14,6 +14,14 @@ uint16_t Cpu::fetch_thumb_opcode()
 
 void Cpu::exec_thumb()
 {
+#ifdef DEBUG
+    if(debug->breakpoint_x.is_hit(regs[PC],mem->read_mem(regs[PC],HALF)) || debug->step_instr)
+    {
+        std::cout << fmt::format("{:08x}: {}\n",regs[PC],disass->disass_thumb(mem->read_mem(regs[PC],HALF),regs[PC]+ARM_HALF_SIZE));
+        debug->enter_debugger();
+    }
+#endif
+    
     uint16_t op = fetch_thumb_opcode();
 
     execute_thumb_opcode(op);

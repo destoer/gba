@@ -34,6 +34,16 @@ uint32_t Cpu::fetch_arm_opcode()
 
 void Cpu::execute_arm_opcode(uint32_t instr)
 {
+
+#ifdef DEBUG
+    if(debug->breakpoint_x.is_hit(regs[PC],mem->read_mem(regs[PC],WORD)) || debug->step_instr)
+    {
+        std::cout << fmt::format("{:08x}: {}\n",regs[PC],disass->disass_arm(mem->read_mem(regs[PC],WORD),regs[PC]+ARM_WORD_SIZE));
+        debug->enter_debugger();
+    }
+#endif
+
+
     // get the bits that determine the kind of instr it is
     uint32_t op = get_arm_opcode_bits(instr);
 
@@ -247,7 +257,9 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
     bool changed_mode = false;
     if(s)
     {
-        if(!has_pc && !l)// no r15 or load uses different mode
+        // no r15 or load uses different mode
+        // dont bother switching if are in user mode
+        if((!has_pc || !l) && cpu_mode != USER)
         {
             changed_mode = true;
             switch_mode(USER);
@@ -457,18 +469,24 @@ void Cpu::arm_psr(uint32_t opcode)
     {
         int rd = (opcode >> 12) & 0xf;
 
-
-        if(cpu_mode < USER)
+        if(spsr)
         {
-            // read spsr or cpsr?
-            regs[rd] = spsr? status_banked[cpu_mode] : cpsr;
+            if(cpu_mode < USER)
+            {
+                regs[rd] = status_banked[cpu_mode];
+            }
+
+            else 
+            {
+                printf("[mrs: %08x]Illegal spsr read %x\n",regs[PC],cpu_mode);
+                print_regs();
+                exit(1);
+            }
         }
 
-        else 
+        else
         {
-            printf("[mrs: %08x]Illegal spsr read %x\n",regs[PC],cpu_mode);
-            print_regs();
-            exit(1);
+            regs[rd] = cpsr;
         }
 
     }
@@ -836,7 +854,7 @@ void Cpu::arm_hds_data_transfer(uint32_t opcode)
     else
     {
         uint8_t imm = opcode & 0xf;
-        imm |= (opcode >> 8) & 0xf;
+        imm |= (opcode >> 4) & 0xf0;
         offset = imm;
     }
 

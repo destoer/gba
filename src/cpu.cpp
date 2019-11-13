@@ -223,7 +223,7 @@ void Cpu::init_arm_opcode_table()
                 
                 // check it ocupies the unused space for
                 //TST,TEQ,CMP,CMN with a S of zero
-                else if(op >= 0b1000 && op <= 0b1011 && !is_set(i,4))
+                else if(op >= 0x8 && op <= 0xb && !is_set(i,4))
                 {
                     arm_opcode_table[i] = &Cpu::arm_psr;
                 }
@@ -341,18 +341,6 @@ void Cpu::tick_timers(int cycles)
 // by skipping the state forward
 void Cpu::step()
 {
-
-
-#ifdef DEBUG
-    uint32_t offset = is_thumb? ARM_HALF_SIZE : ARM_WORD_SIZE;
-    uint32_t op = mem->read_mem(regs[PC],is_thumb? HALF : WORD);
-    std::string str = is_thumb? disass->disass_thumb(op,regs[PC]+offset) : disass->disass_arm(op,regs[PC]+offset);
-    if(debug->breakpoint_x.is_hit(regs[PC],op) || debug->step_instr)
-    {
-        std::cout << fmt::format("{:08x}: {}\n",regs[PC],str);
-        debug->enter_debugger();
-    }
-#endif
 
     if(is_thumb) // step the cpu in thumb mode
     {
