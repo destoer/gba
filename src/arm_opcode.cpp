@@ -43,24 +43,10 @@ void Cpu::execute_arm_opcode(uint32_t instr)
 
 void Cpu::exec_arm()
 {
-
-#ifdef DEBUG
-    if(debug->breakpoint_x.is_hit(regs[PC],mem->read_mem(regs[PC],WORD)) || debug->step_instr)
-    {
-        std::cout << fmt::format("{:08x}: {}\n",regs[PC],disass->disass_arm(mem->read_mem(regs[PC],WORD),regs[PC]+ARM_WORD_SIZE));
-        debug->enter_debugger();
-    }
-#endif
-
     uint32_t instr = fetch_arm_opcode();
-
-
-
 
     // if the condition is not met just
     // advance past the instr
-    // since impl this we get an error lol
-    // page 47
     if(!cond_met(instr >> 28))
     {
        return;
@@ -294,7 +280,7 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
             }
             regs[i] = mem->read_memt(addr,WORD);
 
-            if(i == PC) // if pc is in list cpsr = spsr
+            if(i == PC && s) // if pc is in list and s bit set  cpsr = spsr
             {
                 if(cpu_mode < USER)  // not in user or system mode
                 {
@@ -304,6 +290,7 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
                 else
                 {
                     printf("[block data: %08x] illegal status bank %x\n",regs[PC],cpu_mode);
+                    print_regs();
                     exit(1);
                 }
             }
@@ -459,6 +446,7 @@ void Cpu::arm_psr(uint32_t opcode)
             else
             {
                 printf("[msr: %08x]Illegal spsr write %x\n",regs[PC],cpu_mode);
+                print_regs();
                 exit(1);
             }
         }
@@ -479,6 +467,7 @@ void Cpu::arm_psr(uint32_t opcode)
         else 
         {
             printf("[mrs: %08x]Illegal spsr read %x\n",regs[PC],cpu_mode);
+            print_regs();
             exit(1);
         }
 
@@ -626,6 +615,7 @@ void Cpu::arm_data_processing(uint32_t opcode)
         if(cpu_mode >= USER)
         {
             printf("illegal data processing s with pc %08x\n",regs[PC]);
+            print_regs();
             exit(1);
         }
         
@@ -910,6 +900,7 @@ void Cpu::arm_hds_data_transfer(uint32_t opcode)
             case 0:
             {
                 printf("hds illegal store op: %08x\n",regs[PC]);
+                print_regs();
                 exit(1);
             }
 
@@ -969,6 +960,7 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
     if(!p && w) // operate it in a seperate mode
     {
         printf("T present operate load/store in user mode: : %08x!\n",regs[PC]);
+        print_regs();
         exit(1);
     }
 

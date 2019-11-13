@@ -65,9 +65,11 @@ void Mem::tick_mem_access(int mode)
 uint32_t Mem::read_external(uint32_t addr,Access_type mode)
 {
 
-    if((addr&0x1FFFFFF) > rom.size())
+    uint32_t len =  rom.size();
+    if((addr&0x1FFFFFF) > len)
     {
-        printf("rom read out of range: %08x:%08zx:%08x\n",addr&0x1FFFFFF,rom.size(),cpu->get_pc());
+        printf("rom read out of range: %08x:%08x:%08x\n",addr&0x1FFFFFF,len,cpu->get_pc());
+        cpu->print_regs();
         exit(1);
     }
 
@@ -106,6 +108,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
             {
                 mem_region = SRAM;
                 printf("sram read %08x:%08x\n",cpu->get_pc(),addr);
+                cpu->print_regs();
                 exit(1);
             }
                 
@@ -117,6 +120,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
         }
     }
     printf("read_external fell through %08x\n",addr);
+    cpu->print_regs();
     exit(1);    
 }
 
@@ -133,6 +137,7 @@ uint32_t Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mo
     if(buf.size() < addr + sz)
     {
         printf("out of range handle read at: %08x\n",cpu->get_pc());
+        cpu->print_regs();
         exit(1);
     }
 #endif
@@ -148,15 +153,22 @@ uint32_t Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr,Access_type mo
 
         case HALF:
         {
-            return(*(uint16_t*)(buf.data()+addr));
+            //return(*(uint16_t*)(buf.data()+addr));
+            uint16_t v;
+            memcpy(&v,buf.data()+addr,ARM_HALF_SIZE);
+            return v;
         }
 
         case WORD:
         {
-            return(*(uint32_t*)(buf.data()+addr));
+            //return(*(uint32_t*)(buf.data()+addr));
+            uint32_t v;
+            memcpy(&v,buf.data()+addr,ARM_WORD_SIZE);  
+            return v;          
         }
     }
     puts("Handle_read fell through!?");
+    cpu->print_regs();
     exit(1);
 }
 
@@ -284,6 +296,20 @@ uint8_t Mem::read_io_regs(uint32_t addr)
             break;
         }
 
+
+        case IO_KEYCNT:
+        {
+            return io[addr];
+            break;
+        }
+
+        case IO_KEYCNT+1: // 10-13 not used
+        {
+            return io[addr];
+            break;
+        }
+
+
         case IO_IME: // 0th bit toggles ime
         {
             return ime;
@@ -339,9 +365,9 @@ uint8_t Mem::read_io_regs(uint32_t addr)
 
         default:
         {    
-            //printf("unknown io reg read at %08x:%08x\n",addr,cpu->get_pc());
-            //exit(1);
-            return io[addr];
+            printf("unknown io reg read at %08x:%08x\n",addr,cpu->get_pc());
+            cpu->print_regs();
+            exit(1);
         }
     }
 }
@@ -383,6 +409,7 @@ uint32_t Mem::read_io(uint32_t addr,Access_type mode)
     } 
 
     printf("read_io fell through: %08x\n",mode);
+    cpu->print_regs();
     exit(1);
 }
 
@@ -463,6 +490,11 @@ uint32_t Mem::read_mem(uint32_t addr,Access_type mode)
         case BYTE: break; // free access
         case HALF: addr &= ~1; break; 
         case WORD: addr &= ~3; break;
+        default:
+        { 
+            printf("[read-mem]unknown access mode %x:%08x!\n",mode,cpu->get_pc());
+            exit(1);
+        }
     }
 
 
@@ -519,6 +551,11 @@ void Mem::write_mem(uint32_t addr,uint32_t v,Access_type mode)
         case BYTE: break; // free access
         case HALF: addr &= ~1; break; 
         case WORD: addr &= ~3; break;
+        default:
+        { 
+            printf("[write-mem]unknown access mode %x:%08x!\n",mode,cpu->get_pc());
+            exit(1);
+        }        
     }
 
     if(addr < 0x00004000) { mem_region = BIOS; return; } // bios is read only
@@ -575,6 +612,7 @@ void Mem::write_external(uint32_t addr,uint32_t v,Access_type mode)
             {
                 mem_region = SRAM;
                 printf("sram write %08x:%08x\n",cpu->get_pc(),addr);
+                cpu->print_regs();
                 exit(1);
             }
                 
@@ -586,6 +624,7 @@ void Mem::write_external(uint32_t addr,uint32_t v,Access_type mode)
         }
     }
     printf("write_external fell through %08x:%08x\n",addr,cpu->get_pc());
+    cpu->print_regs();
     exit(1);    
 }
 
@@ -602,6 +641,7 @@ void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access
     if(buf.size() < addr + sz)
     {
         printf("out of range handle write at: %08x\n",cpu->get_pc());
+        cpu->print_regs();
         exit(1);
     }
 #endif
@@ -617,17 +657,20 @@ void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,uint32_t v,Access
 
         case HALF:
         {
-           (*(uint16_t*)(buf.data()+addr)) = v;
+           //(*(uint16_t*)(buf.data()+addr)) = v;
+           memcpy(buf.data()+addr,&v,ARM_HALF_SIZE);
            return;
         }
 
         case WORD:
         {
-           (*(uint32_t*)(buf.data()+addr)) = v;
+           //(*(uint32_t*)(buf.data()+addr)) = v;
+           memcpy(buf.data()+addr,&v,ARM_WORD_SIZE);
            return;
         }
     }
     puts("Handle_write fell through!?");
+    cpu->print_regs();
     exit(1);
 }
 

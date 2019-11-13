@@ -202,6 +202,7 @@ constexpr uint32_t IO_TM3CNT_H = 0x0400010e & IO_MASK;
 
 
 constexpr uint32_t IO_KEYINPUT = 0x04000130 & IO_MASK;
+constexpr uint32_t IO_KEYCNT = 0x04000132 & IO_MASK;
 constexpr uint32_t IO_POSTFLG = 0x040000300 & IO_MASK;
 
 

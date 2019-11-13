@@ -1,6 +1,8 @@
 #include "headers/cpu.h"
 #include "headers/memory.h"
 #include "headers/display.h"
+#include "headers/debugger.h"
+#include "headers/disass.h"
 #include <limits.h>
 
 void Cpu::init(Display *disp, Mem *mem, Debugger *debug, Disass *disass)
@@ -339,6 +341,18 @@ void Cpu::tick_timers(int cycles)
 // by skipping the state forward
 void Cpu::step()
 {
+
+
+#ifdef DEBUG
+    uint32_t offset = is_thumb? ARM_HALF_SIZE : ARM_WORD_SIZE;
+    uint32_t op = mem->read_mem(regs[PC],is_thumb? HALF : WORD);
+    std::string str = is_thumb? disass->disass_thumb(op,regs[PC]+offset) : disass->disass_arm(op,regs[PC]+offset);
+    if(debug->breakpoint_x.is_hit(regs[PC],op) || debug->step_instr)
+    {
+        std::cout << fmt::format("{:08x}: {}\n",regs[PC],str);
+        debug->enter_debugger();
+    }
+#endif
 
     if(is_thumb) // step the cpu in thumb mode
     {
