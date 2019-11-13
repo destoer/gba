@@ -352,9 +352,21 @@ void Debugger::breakpoint(std::vector<std::string> command)
         }
     }
 
-    // set a rwx
+    // set a rwx with value
     else if(size == 4)
     {
+        try
+        {
+            value = std::stoll(command[2],nullptr,16);
+            value_enabled = true;
+        }
+
+        catch(std::exception &e)
+        {
+            std::cout << "unable to convert: " << command[2] << "to a value\n";
+            std::cout << "exception: " << e.what() << "\n";
+            return;
+        }        
         set_break_type(command[3],value,addr,value_enabled);
     }
 
@@ -363,7 +375,7 @@ void Debugger::breakpoint(std::vector<std::string> command)
         breakpoint_x.set(value,addr,value_enabled,true);
     }
 
-    printf("breakpoint set at %08x\n",addr);
+    printf("breakpoint set at %08x:%08x\n",addr,value);
 }
 
 void Debugger::set_break_type(std::string command,uint32_t value,uint32_t addr, bool value_enabled )

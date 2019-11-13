@@ -241,7 +241,6 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
     }
 
     bool has_pc = is_set(rlist,PC);
-    n = has_pc? n+1 : n;
 
     // allways adding on address so if  we are in "down mode"
     // we need to precalc the buttom1
@@ -362,7 +361,6 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
     {
         switch_mode(old_mode);
     }
-
 }
 
 

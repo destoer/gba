@@ -867,9 +867,8 @@ void Cpu::do_interrupts()
             if(is_set(interrupt_enable,i) && is_set(interrupt_flag,i))
             {
                 printf("interrupt fired %08x\n",i);
-                //exit(1);
                 service_interrupt();
-                break; // do we serve multiple interrupts?
+                break; 
             }
         }
     }
@@ -879,13 +878,13 @@ void Cpu::do_interrupts()
 // or does the handler check if?
 void Cpu::service_interrupt()
 {
-    // spsr for supervisor = cpsr
+    // spsr for irq = cpsr
     status_banked[IRQ] = cpsr;
 
-    // lr in supervisor mode set to return addr
+    // lr in irq mode set to return addr
     hi_banked[IRQ][1] = regs[PC];
 
-    // supervisor mode switch
+    // irq mode switch
     switch_mode(IRQ);
 
     

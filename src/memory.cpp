@@ -30,7 +30,7 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu,Display *disp)
 
     // all unpressed
     io[IO_KEYINPUT] = 0xff;
-    io[IO_KEYINPUT+1] = 0xff;
+    io[IO_KEYINPUT+1] = 0x3;
 
 
 
@@ -273,14 +273,14 @@ uint8_t Mem::read_io_regs(uint32_t addr)
 
         case IO_KEYINPUT:
         {
-            return io[IO_KEYINPUT];
+            return io[addr];
             break;
         }
 
       
         case IO_KEYINPUT+1: // 10-15 unused
         {
-            return io[IO_KEYINPUT];
+            return io[addr];
             break;
         }
 
@@ -448,7 +448,7 @@ uint32_t Mem::read_mem(uint32_t addr,Access_type mode)
 
         if(debug->breakpoint_r.is_hit(addr,value))
         {
-            printf("read breakpoint hit at %08x\n",addr);
+            printf("read breakpoint hit at %08x:%08x:%08x\n",addr,value,cpu->get_pc());
             debug->enter_debugger();
         }
     }    
@@ -504,7 +504,7 @@ void Mem::write_mem(uint32_t addr,uint32_t v,Access_type mode)
     {
         if(debug->breakpoint_w.is_hit(addr,v))
         {
-            printf("write breakpoint hit at %08x\n",addr);
+            printf("write breakpoint hit at %08x:%08x:%08x\n",addr,v,cpu->get_pc());
             debug->enter_debugger();
         }
     }    

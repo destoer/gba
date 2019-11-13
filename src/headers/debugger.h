@@ -76,13 +76,13 @@ public:
             }
 
             // value enabled and its not equal
-            if(value_enabled && value != this->value)
+            else if(value_enabled && value != this->value)
             {
                 return false;
             }
 
             // not breakpointed on this addr
-            if(addr != this->addr)
+            else if(addr != this->addr)
             {
                 return false;
             }
