@@ -23,6 +23,7 @@ void Mem::init(std::string filename, Debugger *debug,Cpu *cpu,Display *disp)
     pal_ram.resize(0x400);
     vram.resize(0x18000);
     oam.resize(0x400); 
+    sram.resize(0xffff);
     
     // read out rom info here...
     std::cout << "rom size: " << rom.size() << "\n";
@@ -104,12 +105,34 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
 
         case 0xe: // sram
         {
-            if(addr <= 0x0e00ffff)
+            if(addr <= 0x0e00ffff) // need save type det and handling the actual flash commands
             {
+                if(mode != BYTE)
+                {
+                    printf("illegal sram read %08x:%08x\n",cpu->get_pc(),addr);
+                    cpu->print_regs();
+                    exit(1);                    
+                }
+
                 mem_region = SRAM;
-                printf("sram read %08x:%08x\n",cpu->get_pc(),addr);
-                cpu->print_regs();
-                exit(1);
+
+
+                // ugly hack
+                if((addr & 0xffff) == 1)
+                {
+                    return 0x1c;
+                }
+
+                else if((addr & 0xffff) == 0)
+                {
+                    return 0xc2;
+                }
+
+
+                return sram[addr & 0xffff];
+                //printf("sram read %08x:%08x\n",cpu->get_pc(),addr);
+                //cpu->print_regs();
+                //exit(1);
             }
                 
             else // unused
@@ -612,9 +635,19 @@ void Mem::write_external(uint32_t addr,uint32_t v,Access_type mode)
             if(addr <= 0x0e00ffff)
             {
                 mem_region = SRAM;
-                printf("sram write %08x:%08x\n",cpu->get_pc(),addr);
-                cpu->print_regs();
-                exit(1);
+                if(mode != BYTE)
+                {
+                    printf("invalid sram write %08x:%08x\n",cpu->get_pc(),addr);
+                    cpu->print_regs();
+                    exit(1);                    
+                }
+
+                sram[addr & 0xfffe] = v;
+                return;
+
+                //printf("sram write %08x:%08x\n",cpu->get_pc(),addr);
+                //cpu->print_regs();
+                //exit(1);
             }
                 
             else // unused
@@ -948,11 +981,14 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         // dma 0 transfer control
         case IO_DMA0CNT_H+1:
         {
-            io[addr] = v;
-            if(is_set(v,7)) // transfer enabeld
+            if(is_set(v,7) && !is_set(io[addr],7)) // transfer enabeld
             {
+                cpu->dma_regs[0].src = handle_read(io,IO_DMA0SAD,WORD);
+                cpu->dma_regs[0].dst = handle_read(io,IO_DMA0DAD,WORD);   
+                cpu->dma_regs[0].nn = handle_read(io,IO_DMA0CNT_L,HALF);             
                 cpu->handle_dma(Dma_type::IMMEDIATE);
             }
+            io[addr] = v;
             break;
         }
 
@@ -1002,11 +1038,14 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         // dma 1 transfer control
         case IO_DMA1CNT_H+1:
         {
-            io[addr] = v;
-            if(is_set(v,7)) // transfer enabeld
+            if(is_set(v,7) && !is_set(io[addr],7)) // transfer enabeld
             {
+                cpu->dma_regs[1].src = handle_read(io,IO_DMA1SAD,WORD);
+                cpu->dma_regs[1].dst = handle_read(io,IO_DMA1DAD,WORD);
+                cpu->dma_regs[1].nn = handle_read(io,IO_DMA1CNT_L,HALF);   
                 cpu->handle_dma(Dma_type::IMMEDIATE);
             }
+            io[addr] = v;
             break;
         }
 
@@ -1052,11 +1091,14 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         // dma 2 transfer control
         case IO_DMA2CNT_H+1:
         {
-            io[addr] = v;
-            if(is_set(v,7)) // transfer enabeld
+            if(is_set(v,7) && !is_set(io[addr],7)) // transfer enabeld
             {
+                cpu->dma_regs[2].src = handle_read(io,IO_DMA2SAD,WORD);
+                cpu->dma_regs[2].dst = handle_read(io,IO_DMA2DAD,WORD);
+                cpu->dma_regs[2].nn = handle_read(io,IO_DMA2CNT_L,HALF);   
                 cpu->handle_dma(Dma_type::IMMEDIATE);
             }
+            io[addr] = v;
             break;
         }
 
@@ -1102,12 +1144,14 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         // dma 3 transfer control
         case IO_DMA3CNT_H+1:
         {
-            io[addr] = v;
-            if(is_set(v,7)) // transfer enabeld
+            if(is_set(v,7) && !is_set(io[addr],7)) // transfer enabeld
             {
-                printf("dma started %08x\n",cpu->get_pc());
+                cpu->dma_regs[3].src = handle_read(io,IO_DMA3SAD,WORD);
+                cpu->dma_regs[3].dst = handle_read(io,IO_DMA3DAD,WORD);
+                cpu->dma_regs[3].nn = handle_read(io,IO_DMA3CNT_L,HALF);                          
                 cpu->handle_dma(Dma_type::IMMEDIATE);
             }
+            io[addr] = v;
             break;
         }
 

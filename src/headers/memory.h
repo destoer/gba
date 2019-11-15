@@ -106,6 +106,8 @@ private:
     // on chip wram
     std::vector<uint8_t> chip_wram; // 0x8000
 
+    // cart save ram
+    std::vector<uint8_t> sram; // 0xffff
 
     bool ime = true;
 

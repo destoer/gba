@@ -62,6 +62,17 @@ public:
     void execute_thumb_opcode(uint16_t instr);
     
     void request_interrupt(Interrupt interrupt);
+
+
+    struct Dma_reg
+    {
+        uint32_t src; // source addr
+        uint32_t dst; // dest addr
+        uint32_t nn; // word count
+    };
+
+    Dma_reg dma_regs[4];
+
     void handle_dma(Dma_type req_type);
 private:
 
@@ -137,7 +148,7 @@ private:
 
     // dma
     //void handle_dma(Dma_type req_type);
-    void do_dma(uint32_t source, uint32_t dest, uint32_t nn, uint16_t &dma_cnt,Dma_type req_type, int dma_number);
+    void do_dma(uint16_t &dma_cnt,Dma_type req_type, int dma_number);
 
 
     // timers

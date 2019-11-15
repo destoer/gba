@@ -226,6 +226,13 @@ void Display::render()
             break;
         }
 
+
+        case 0x2: // bg mode 2
+        {
+            printf("bg mode 2 %08x\n",cpu->get_pc());
+            exit(1);            
+        }
+
         case 0x3: // bg mode 3 
         {
             for(int x = 0; x < X; x++)

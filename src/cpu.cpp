@@ -930,17 +930,22 @@ void Cpu::handle_dma(Dma_type req_type)
                 if(req_type == dma_type)
                 {
                     uint32_t base_addr = IO_DMA0SAD + i * 12;
-                    uint32_t src = mem->handle_read(mem->io,base_addr,WORD);
-                    uint32_t dst = mem->handle_read(mem->io,base_addr+4,WORD);
-                    uint32_t nn =  mem->handle_read(mem->io,base_addr+8,HALF);
 
-                    // if a zero len transfer it uses the max len for that dma
-                    if(nn == 0)
+
+                    if(is_set(dma_cnt[i],9)) // repeat bit so reload word count
                     {
-                        nn = zero_table[i];
+                        dma_regs[i].nn = mem->handle_read(mem->io,base_addr+8,HALF);
                     }
 
-                    do_dma(src,dst,nn,dma_cnt[i],req_type,i);
+                    // if a zero len transfer it uses the max len for that dma
+                    if(dma_regs[i].nn == 0)
+                    {
+                        dma_regs[i].nn = zero_table[i];
+                    }
+
+
+
+                    do_dma(dma_cnt[i],req_type,i);
                     uint32_t cnt_addr = base_addr + 10;
                     mem->handle_write(mem->io,cnt_addr,dma_cnt[i],HALF); // write back the control reg!
                 }
@@ -964,24 +969,36 @@ void Cpu::handle_dma(Dma_type req_type)
 
 // this needs to know the dma number aswell as the type of dma
 // <-- dma is halting my emulator haha
-void Cpu::do_dma(uint32_t source, uint32_t dest, uint32_t nn, uint16_t &dma_cnt,Dma_type req_type, int dma_number)
+void Cpu::do_dma(uint16_t &dma_cnt,Dma_type req_type, int dma_number)
 {
+
+    if(is_set(dma_cnt,11))
+    {
+        puts("gamepak dma!");
+        exit(1);
+    }
+
+
+    dma_in_progress = true;
+
+    Dma_reg &dma_reg = dma_regs[dma_number];
+
+    uint32_t source = dma_reg.src;
+    uint32_t dest = dma_reg.dst;
+
+
+    bool is_half = !is_set(dma_cnt,10);
+    uint32_t size = is_half? ARM_HALF_SIZE : ARM_WORD_SIZE;
+    Access_type type = is_half? HALF : WORD;
 
     source &= 0x0fffffff;
     dest &= 0x0fffffff;
 
-
-    printf("%08x:%08x:%08x\n",source,dest,nn);
-
-    dma_in_progress = true;
-
-    if(nn == 0) { puts("dma unhandled n  = 0"); exit(1); }
-
-    for(size_t i = 0; i < nn; i++)
+    for(size_t i = 0; i < dma_reg.nn; i++)
     {
-        uint32_t offset = i * ARM_WORD_SIZE;
-        uint32_t v = mem->read_memt(source+offset,WORD);
-        mem->write_memt(dest+offset,v,WORD);
+        uint32_t offset = i * size;
+        uint32_t v = mem->read_memt(source+offset,type);
+        mem->write_memt(dest+offset,v,type);
     }
 
     static constexpr Interrupt dma_interrupt[4] = {Interrupt::DMA0,Interrupt::DMA1,Interrupt::DMA2,Interrupt::DMA3}; 
@@ -995,7 +1012,66 @@ void Cpu::do_dma(uint32_t source, uint32_t dest, uint32_t nn, uint16_t &dma_cnt,
     {
         dma_cnt = deset_bit(dma_cnt,15); // disable it
     }
-    puts("finished dma!");
+
+    int sad_mode = (dma_cnt >> 8) & 3;
+    int dad_mode = (dma_cnt >> 6) & 3;
+
+
+    switch(sad_mode)
+    {
+        case 0: // increment
+        {
+            dma_reg.src += dma_reg.nn * size;
+            break;
+        }
+
+        case 1: // decrement
+        {
+            dma_reg.src -= dma_reg.nn * size;
+            break;
+        }
+
+        case 2: // fixed (do nothing)
+        {
+            break;
+        }
+
+        case 3: // invalid
+        {
+            puts("sad mode of 3!");
+            exit(1);
+        }
+    }
+
+
+    switch(dad_mode)
+    {
+        case 0: // increment
+        {
+            dma_reg.dst += dma_reg.nn * size;
+            break;
+        }
+
+        case 1: // decrement
+        {
+            dma_reg.dst -= dma_reg.nn * size;
+            break;
+        }
+
+        case 2: // fixed (do nothing)
+        {
+            break;
+        }
+
+        case 3: // incremnt + reload
+        {
+            uint32_t base_addr = IO_DMA0SAD + dma_number * 12;
+            dma_reg.dst = mem->handle_read(mem->io,base_addr+4,WORD);
+            dma_reg.dst += dma_reg.nn * size;
+            break;
+        }
+    }
+
 
     dma_in_progress = false;
 }

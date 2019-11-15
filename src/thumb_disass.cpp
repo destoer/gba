@@ -157,7 +157,7 @@ std::string Disass::disass_thumb_load_store_sp(uint16_t opcode)
 
     std::string instr = l ? "ldr" : "str";
 
-    return fmt::format("{} {}, [sp,#{:x}]",instr,user_regs_names[rd],nn);
+    return fmt::format("{} {}, [sp,#0x{:x}]",instr,user_regs_names[rd],nn);
 }
 
 std::string Disass::disass_thumb_sp_add(uint16_t opcode)
@@ -219,7 +219,7 @@ std::string Disass::disass_thumb_get_rel_addr(uint16_t opcode)
 
 std::string Disass::disass_thumb_branch(uint16_t opcode)
 {
-    int offset = sign_extend((opcode & 0x7ff) * 2,12);
+    int offset = sign_extend((opcode & 0x3ff) * 2,11);
     return fmt::format("b #0x{:08x}",pc+2+offset);
 }
 
@@ -286,7 +286,7 @@ std::string Disass::disass_thumb_ldst_imm(uint16_t opcode)
         case 0b11: // ldrb
         {
             return fmt::format("ldrb {},[{},#0x{:x}]",user_regs_names[rd],
-                user_regs_names[rb],imm*4);            
+                user_regs_names[rb],imm);            
             break;
         }
     }

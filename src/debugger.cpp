@@ -267,7 +267,7 @@ void Debugger::enter_debugger()
         if(command.size() == 0)
         {
             std::cout << "Error parsing input!";
-            continue;
+            debug_quit = true;
         }
 
         // first word will have the command

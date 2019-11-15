@@ -26,7 +26,12 @@ uint32_t Cpu::fetch_arm_opcode()
     return opcode;
     */
 
+
+
+
     // ignore the pipeline for now
+    regs[PC] &= ~3; // algin
+
     uint32_t opcode = mem->read_memt(regs[PC],WORD);
     regs[PC] += ARM_WORD_SIZE;
     return opcode;
@@ -34,16 +39,6 @@ uint32_t Cpu::fetch_arm_opcode()
 
 void Cpu::execute_arm_opcode(uint32_t instr)
 {
-
-#ifdef DEBUG
-    if(debug->breakpoint_x.is_hit(regs[PC],mem->read_mem(regs[PC],WORD)) || debug->step_instr)
-    {
-        std::cout << fmt::format("{:08x}: {}\n",regs[PC],disass->disass_arm(mem->read_mem(regs[PC],WORD),regs[PC]+ARM_WORD_SIZE));
-        debug->enter_debugger();
-    }
-#endif
-
-
     // get the bits that determine the kind of instr it is
     uint32_t op = get_arm_opcode_bits(instr);
 
@@ -53,6 +48,13 @@ void Cpu::execute_arm_opcode(uint32_t instr)
 
 void Cpu::exec_arm()
 {
+#ifdef DEBUG
+    if(debug->breakpoint_x.is_hit(regs[PC],mem->read_mem(regs[PC],WORD)) || debug->step_instr)
+    {
+        std::cout << fmt::format("{:08x}: {}\n",regs[PC],disass->disass_arm(mem->read_mem(regs[PC],WORD),regs[PC]+ARM_WORD_SIZE));
+        debug->enter_debugger();
+    }
+#endif
     uint32_t instr = fetch_arm_opcode();
 
     // if the condition is not met just
@@ -371,11 +373,8 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
 
 void Cpu::arm_branch(uint32_t opcode)
 {
-
-
-
     // account for prefetch operation
-    uint32_t pc = regs[PC] + 4;
+    uint32_t pc = regs[PC] + ARM_WORD_SIZE;
 
     // 24 bit offset is shifted left 2
     // and extended to a 32 bit int
@@ -812,7 +811,15 @@ void Cpu::arm_branch_and_exchange(uint32_t opcode)
     cpsr = is_thumb? set_bit(cpsr,5) : deset_bit(cpsr,5);
 
     // branch
-    regs[PC] = regs[rn] & ~1;
+    if(is_thumb)
+    {
+        regs[PC] = regs[rn] & ~1;
+    }
+
+    else
+    {
+        regs[PC] = regs[rn] & ~3;
+    }
 
     // 2s + 1n
     cycle_tick(3);
@@ -915,34 +922,18 @@ void Cpu::arm_hds_data_transfer(uint32_t opcode)
     {
         switch(op)
         {
-            case 0:
-            {
-                printf("hds illegal store op: %08x\n",regs[PC]);
-                print_regs();
-                exit(1);
-            }
-
             case 1: // strh
             {
                 mem->write_memt(addr,value,HALF);
                 cycle_tick(2); // 2n cycles
                 break;
             }
-
-            case 2: // ldrd
+            
+            default: // doubleword ops not supported on armv4
             {
-                regs[rd] = mem->read_memt(addr,WORD);
-                regs[rd+1] = mem->read_memt(addr+ARM_WORD_SIZE,WORD);
-                cycle_tick(cycles+3); // 1s + 1n + 1i
-                break;
-            }
-
-            case 3: // strd
-            {
-                mem->write_memt(addr,regs[rd],WORD);
-                mem->write_memt(addr+ARM_WORD_SIZE,value,WORD);
-                cycle_tick(2); // 2n cycles
-                break;
+                printf("hds illegal store op: %08x\n",regs[PC]);
+                print_regs();
+                exit(1);
             }
 
         }

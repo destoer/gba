@@ -7,6 +7,7 @@
 uint16_t Cpu::fetch_thumb_opcode()
 {
     // ignore the pipeline for now
+    regs[PC] &= ~1;
     uint16_t opcode = mem->read_memt(regs[PC],HALF);
     regs[PC] += ARM_HALF_SIZE;
     return opcode;
@@ -26,6 +27,17 @@ void Cpu::exec_thumb()
 
     execute_thumb_opcode(op);
 }
+
+void Cpu::execute_thumb_opcode(uint16_t instr)
+{
+    // get the bits that determine the kind of instr it is
+    uint8_t op = (instr >> 8) & 0xff;
+
+    // call the function from our opcode table
+    std::invoke(thumb_opcode_table[op],this,instr);    
+}
+
+
 
 void Cpu::thumb_unknown(uint16_t opcode)
 {
@@ -76,7 +88,8 @@ void Cpu::thumb_sp_add(uint16_t opcode)
 void Cpu::thumb_swi(uint16_t opcode)
 {
     // do we even do anything with nn!?
-    UNUSED(opcode);
+    //UNUSED(opcode);
+    printf("[thumb-swi: %08x] %x\n",regs[PC],opcode & 0xff);
 
     // spsr for supervisor = cpsr
     status_banked[SUPERVISOR] = cpsr;
@@ -114,15 +127,6 @@ void Cpu::thumb_get_rel_addr(uint16_t opcode)
         regs[rd] = regs[SP] + offset;
     }
     cycle_tick(1); // 1 s cycle
-}
-
-void Cpu::execute_thumb_opcode(uint16_t instr)
-{
-    // get the bits that determine the kind of instr it is
-    uint8_t op = (instr >> 8) & 0xff;
-
-    // call the function from our opcode table
-    std::invoke(thumb_opcode_table[op],this,instr);    
 }
 
 void Cpu::thumb_load_store_sbh(uint16_t opcode)
@@ -212,8 +216,8 @@ void Cpu::thumb_load_store_reg(uint16_t opcode)
 
 void Cpu::thumb_branch(uint16_t opcode)
 {
-    int offset = (opcode & 0x7ff)*2;
-    offset = sign_extend(offset,12);
+    int offset = (opcode & 0x3ff)*2;
+    offset = sign_extend(offset,11);
     regs[PC] += offset+2;
 
     cycle_tick(3); // 2s +1n 
@@ -449,6 +453,11 @@ void Cpu::thumb_alu(uint16_t opcode)
             break;         
         }
 
+        case 0x5: // adc
+        {
+            regs[rd] = adc(regs[rd],regs[rs],true);
+            break;
+        }
 
         case 0x6: // sbc
         {
@@ -493,6 +502,12 @@ void Cpu::thumb_alu(uint16_t opcode)
         case 0xa: // cmp
         {
             sub(regs[rd],regs[rs],true);
+            break;
+        }
+
+        case 0xb: // cmn
+        {
+            add(regs[rd],regs[rs],true);
             break;
         }
 
@@ -607,14 +622,14 @@ void Cpu::thumb_ldst_imm(uint16_t opcode)
 
         case 0b10: // strb
         {
-            mem->write_memt((regs[rb]+imm*4),regs[rd],BYTE);
+            mem->write_memt((regs[rb]+imm),regs[rd],BYTE);
             cycle_tick(2);
             break;
         }
 
         case 0b11: // ldrb
         {
-            regs[rd] = mem->read_memt((regs[rb]+imm*4),BYTE);
+            regs[rd] = mem->read_memt((regs[rb]+imm),BYTE);
             cycle_tick(3);       
             break;
         }
@@ -679,7 +694,7 @@ void Cpu::thumb_long_bl(uint16_t opcode)
         // tmp = next instr addr
         uint32_t tmp = regs[PC];
         // pc = lr + offsetlow << 1
-        regs[PC] = regs[LR] + (offset << 1);
+        regs[PC] = (regs[LR] + (offset << 1)) & ~1;
         // lr = tmp | 1
         regs[LR] = tmp | 1;
         cycle_tick(3); //2S+1N cycle
@@ -728,15 +743,17 @@ void Cpu::thumb_mcas_imm(uint16_t opcode)
             break;
         }
 
-        case 0b10: // add
-        {
-            regs[rd] = add(regs[rd],imm,true);
-            break;
-        }
 
         case 0b01: //cmp
         {
             sub(regs[rd],imm,true);
+            break;
+        }
+
+
+        case 0b10: // add
+        {
+            regs[rd] = add(regs[rd],imm,true);
             break;
         }
 
@@ -770,7 +787,7 @@ void Cpu::thumb_cond_branch(uint16_t opcode)
     // if branch taken 2s +1n cycles
     if(cond_met(cond))
     {
-        regs[PC] = addr;
+        regs[PC] = addr & ~1;
         cycle_tick(3);
     }
 
@@ -787,7 +804,7 @@ void Cpu::thumb_ldr_pc(uint16_t opcode)
     int rd = (opcode >> 8) & 0x7;
 
     // 0 - 1020 in offsets of 4
-    int offset = (opcode & 0xff) * 4;
+    uint32_t offset = (opcode & 0xff) * 4;
 
     // pc will have bit two deset to ensure word alignment
     // pc is + 4 ahead of current instr

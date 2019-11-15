@@ -49,6 +49,9 @@ void GBA::run()
 	std::vector<int>fps_table (10);
 	int fps_table_idx = 0;
 
+#ifdef DEBUG
+	enter_debugger();
+#endif
     for(;;)
     {
 
