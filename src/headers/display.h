@@ -29,6 +29,7 @@ private:
     uint32_t reference_point_y;
 
     void render();
+    void render_text(int id);
     void advance_line();
 
 
