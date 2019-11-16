@@ -156,8 +156,8 @@ void Display::render_text(int id)
         {
             case 1: // 512 by 256
             {
-                    bg_map_offset += x_pos> 255 ? 0x800 : 0;
-                    break;
+                bg_map_offset += x_pos> 255 ? 0x800 : 0;
+                break;
             }
 
             case 2: // 256 by 512
@@ -286,26 +286,6 @@ void Display::render()
 // not 100% sure when interrupts are reqed
 void Display::tick(int cycles)
 {
-
-/*
-    // forced blank is active
-    // how does this work exsacly?
-    // does the display still run during this?
-    if(is_set(mem->io[IO_DISPCNT],7))
-    {
-        mode = VBLANK;
-        cyc_cnt += cycles;
-        if(cyc_cnt >= 280896)
-        {
-            new_vblank = true;
-            cyc_cnt = 0;
-        }
-        return;
-    }
-*/
- 
-
-
     cyc_cnt += cycles;
 
     switch(mode)
@@ -382,13 +362,13 @@ void Display::tick(int cycles)
                 // enter hblank (dont set the internal mode here)
                 mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],1);
 
-                /* does the hblank irq fire here?
+                // does the hblank irq fire here?
                 // if hblank irq enabled
                 if(is_set(mem->io[IO_DISPSTAT],4))
                 {
                     cpu->request_interrupt(Interrupt::HBLANK);
                 }
-                */
+                
             }
 
             break;

@@ -444,7 +444,7 @@ void Debugger::info(std::vector<std::string> command)
                     printf("  %02x",i);
                 }
                 
-                printf("\n\n%04x: %02x ,",addr,mem->read_mem(addr,BYTE));
+                printf("\n\n%08x: %02x ,",addr,mem->read_mem(addr,BYTE));
                 for(int i = 1; i < x; i++)
                 {	
                     // makes it "slow" to format but oh well

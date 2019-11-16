@@ -16,7 +16,7 @@ uint16_t Cpu::fetch_thumb_opcode()
 void Cpu::exec_thumb()
 {
 #ifdef DEBUG
-    if(debug->breakpoint_x.is_hit(regs[PC],mem->read_mem(regs[PC],HALF)) || debug->step_instr)
+    if(debug->breakpoint_x.is_hit(regs[PC],mem->read_mem(regs[PC],HALF),HALF) || debug->step_instr)
     {
         std::cout << fmt::format("{:08x}: {}\n",regs[PC],disass->disass_thumb(mem->read_mem(regs[PC],HALF),regs[PC]+ARM_HALF_SIZE));
         debug->enter_debugger();
@@ -50,7 +50,7 @@ void Cpu::thumb_unknown(uint16_t opcode)
 
 void Cpu::thumb_load_store_sp(uint16_t opcode)
 {
-    uint8_t nn = (opcode & 0xff) * 4;
+    uint32_t nn = (opcode & 0xff) * 4;
     int rd = (opcode >> 8) & 0x7;
     bool l = is_set(opcode,11);
 
@@ -75,7 +75,7 @@ void Cpu::thumb_load_store_sp(uint16_t opcode)
 void Cpu::thumb_sp_add(uint16_t opcode)
 {
     bool u = !is_set(opcode,7);
-    int nn = (opcode & 127) * 4;
+    uint32_t nn = (opcode & 127) * 4;
 
     regs[SP] += u? nn : -nn;
 
@@ -595,7 +595,7 @@ void Cpu::thumb_ldst_imm(uint16_t opcode)
 {
     int op = (opcode >> 11) & 3;
 
-    int imm = opcode >> 6 & 31;
+    int imm = (opcode >> 6) & 0x1f;
 
     int rb = (opcode >> 3) & 0x7;
     int rd = opcode & 0x7;

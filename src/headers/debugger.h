@@ -77,15 +77,25 @@ public:
             break_enabled = true;
         }
 
-        bool is_hit(uint32_t addr, uint32_t value)
+        bool is_hit(uint32_t addr, uint32_t value, Access_type mode)
         {
+            uint32_t v;
+            switch(mode)
+            {
+                case BYTE: v = (uint8_t)value; break;
+                case HALF: v = (uint16_t)value; break;
+                case WORD: v = value; break;
+                default: puts("breakpoint_hit mode error!"); exit(1);
+            }
+
+
             if(!break_enabled)
             {
                 return false;
             }
 
             // value enabled and its not equal
-            else if(value_enabled && value != this->value)
+            else if(value_enabled && v != this->value)
             {
                 return false;
             }

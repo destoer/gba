@@ -117,6 +117,9 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
                 mem_region = SRAM;
 
 
+
+
+
                 // ugly hack
                 if((addr & 0xffff) == 1)
                 {
@@ -536,7 +539,7 @@ uint32_t Mem::read_mem(uint32_t addr,Access_type mode)
         uint32_t value = read_mem(addr,mode);
         debug->breakpoint_r.enable();
 
-        if(debug->breakpoint_r.is_hit(addr,value))
+        if(debug->breakpoint_r.is_hit(addr,value,mode))
         {
             printf("read breakpoint hit at %08x:%08x:%08x\n",addr,value,cpu->get_pc());
             debug->enter_debugger();
@@ -597,7 +600,7 @@ void Mem::write_mem(uint32_t addr,uint32_t v,Access_type mode)
 #ifdef DEBUG
     if(debug->breakpoint_w.break_enabled)
     {
-        if(debug->breakpoint_w.is_hit(addr,v))
+        if(debug->breakpoint_w.is_hit(addr,v,mode))
         {
             printf("write breakpoint hit at %08x:%08x:%08x\n",addr,v,cpu->get_pc());
             debug->enter_debugger();
@@ -774,22 +777,6 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
 
         case IO_DISPCNT:
         {
-            /*
-            // enter forced blank
-            if(!is_set(io[addr],7) && is_set(v,7))
-            {
-                puts("entering forced blank!");
-                disp->set_cycles(0);
-                disp->set_mode(VBLANK);
-            }
-
-            // leaving forced blank
-            else if(is_set(io[addr],7) && !is_set(v,7))
-            {
-                disp->set_mode(VISIBLE);
-            }
-            */
-
             // gba / cgb mode is reserved
             io[addr] = v & ~8;
             break;
@@ -818,7 +805,7 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         {
             // first 3 bits read only
             // 6 and 7 are unused
-            io[addr] = v & ~0xc3;
+            io[addr] = v & ~0xc7;
             break;
         }
 

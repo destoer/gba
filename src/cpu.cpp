@@ -345,7 +345,6 @@ void Cpu::tick_timers(int cycles)
 // by skipping the state forward
 void Cpu::step()
 {
-
     if(is_thumb) // step the cpu in thumb mode
     {
         exec_thumb();
@@ -863,20 +862,20 @@ void Cpu::request_interrupt(Interrupt interrupt)
 
 void Cpu::do_interrupts()
 {
+    if(is_set(cpsr,7)) // irqs maksed
+    {
+        return;
+    }
+
+
     uint16_t interrupt_enable = mem->handle_read(mem->io,IO_IE,HALF);
     uint16_t interrupt_flag = mem->handle_read(mem->io,IO_IF,HALF);
 
-    if(mem->get_ime() && !is_set(cpsr,7)) // ime on and irqs not masked!
+    // the handler will find out what fired for us!
+    if((mem->get_ime() & interrupt_enable & interrupt_flag) != 0)
     {
-        for(int i = 0; i < 14; i++)
-        {
-            if(is_set(interrupt_enable,i) && is_set(interrupt_flag,i))
-            {
-                //printf("interrupt fired %08x\n",i);
-                service_interrupt();
-                break; 
-            }
-        }
+        //printf("interrupt fired!");
+        service_interrupt();
     }
 }
 
@@ -888,6 +887,7 @@ void Cpu::service_interrupt()
     status_banked[IRQ] = cpsr;
 
     // lr in irq mode set to return addr
+    // is this correct?
     hi_banked[IRQ][1] = regs[PC];
 
     // irq mode switch

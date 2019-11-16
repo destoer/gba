@@ -151,7 +151,7 @@ void Disass::init_thumb_disass_table()
 
 std::string Disass::disass_thumb_load_store_sp(uint16_t opcode)
 {
-    uint8_t nn = (opcode & 0xff) * 4;
+    uint32_t nn = (opcode & 0xff) * 4;
     int rd = (opcode >> 8) & 0x7;
     bool l = is_set(opcode,11);
 

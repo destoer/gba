@@ -49,7 +49,7 @@ void Cpu::execute_arm_opcode(uint32_t instr)
 void Cpu::exec_arm()
 {
 #ifdef DEBUG
-    if(debug->breakpoint_x.is_hit(regs[PC],mem->read_mem(regs[PC],WORD)) || debug->step_instr)
+    if(debug->breakpoint_x.is_hit(regs[PC],mem->read_mem(regs[PC],WORD),WORD) || debug->step_instr)
     {
         std::cout << fmt::format("{:08x}: {}\n",regs[PC],disass->disass_arm(mem->read_mem(regs[PC],WORD),regs[PC]+ARM_WORD_SIZE));
         debug->enter_debugger();
@@ -59,7 +59,7 @@ void Cpu::exec_arm()
 
     // if the condition is not met just
     // advance past the instr
-    if(!cond_met(instr >> 28))
+    if(!cond_met((instr >> 28) & 0xf))
     {
        return;
     }
