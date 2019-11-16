@@ -302,7 +302,7 @@ void Cpu::tick_timers(int cycles)
     // ignore count up timing for now
     for(int i = 0; i < 4; i++)
     {
-        uint32_t offset = i * ARM_HALF_SIZE;
+        int offset = i*ARM_WORD_SIZE;
         uint16_t cnt = mem->handle_read(mem->io,IO_TM0CNT_H+offset,HALF);
 
         if(!is_set(cnt,7)) // timer is not enabled
@@ -313,25 +313,29 @@ void Cpu::tick_timers(int cycles)
         if(is_set(cnt,2)) // count up timer
         {
             puts("count up timer!");
+            exit(1);
         }
 
-        uint32_t lim = timer_lim[i];
+        uint32_t lim = timer_lim[cnt & 0x3];
+
+       // printf("%08x\n",lim);
 
         timer_scale[i] += cycles;
 
         if(timer_scale[i] >= lim)
         {
-            timer_scale[i] %= lim;
-            timers[i] += 1;
-            if(timers[i] >= 0x10000) // overflowed
+            timers[i] += timer_scale[i] / lim;
+            uint32_t max_cyc = std::numeric_limits<uint16_t>::max();
+            if(timers[i] >= max_cyc) // overflowed
             {
                 // add the reload values
-                timers[i] = mem->handle_read(mem->io,IO_TM0CNT_L+offset,HALF);
+                timers[i] = mem->handle_read(mem->io,IO_TM0CNT_L+offset,HALF) + timers[i] % max_cyc;
                 if(is_set(cnt,6))
                 {
                     request_interrupt(interrupt_table[i]);
                 }
             }
+            timer_scale[i] %= lim;
         }
     }    
 }
@@ -868,7 +872,7 @@ void Cpu::do_interrupts()
         {
             if(is_set(interrupt_enable,i) && is_set(interrupt_flag,i))
             {
-                printf("interrupt fired %08x\n",i);
+                //printf("interrupt fired %08x\n",i);
                 service_interrupt();
                 break; 
             }

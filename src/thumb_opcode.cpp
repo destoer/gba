@@ -88,8 +88,8 @@ void Cpu::thumb_sp_add(uint16_t opcode)
 void Cpu::thumb_swi(uint16_t opcode)
 {
     // do we even do anything with nn!?
-    //UNUSED(opcode);
-    printf("[thumb-swi: %08x] %x\n",regs[PC],opcode & 0xff);
+    UNUSED(opcode);
+    //printf("[thumb-swi: %08x] %x\n",regs[PC],opcode & 0xff);
 
     // spsr for supervisor = cpsr
     status_banked[SUPERVISOR] = cpsr;
@@ -231,13 +231,13 @@ void Cpu::thumb_load_store_half(uint16_t opcode)
 
     bool load = is_set(opcode,11);
 
-    if(load)
+    if(load) // ldrh
     {
         regs[rd] = mem->read_memt(regs[rb]+nn,HALF);
         cycle_tick(3); //1s +1n + 1i
     }   
 
-    else
+    else //strh
     {
         mem->write_memt(regs[rb]+nn,regs[rd],HALF);
         cycle_tick(2); // 2n for str

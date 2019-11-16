@@ -120,7 +120,7 @@ uint32_t Mem::read_external(uint32_t addr,Access_type mode)
                 // ugly hack
                 if((addr & 0xffff) == 1)
                 {
-                    return 0x1c;
+                    return 0x09;
                 }
 
                 else if((addr & 0xffff) == 0)
@@ -301,6 +301,45 @@ uint8_t Mem::read_io_regs(uint32_t addr)
         case IO_DMA3CNT_H+1:
         {
             return io[addr];
+            break;
+        }
+
+
+        // timer 0  reload value
+        // return current count when read from
+        case IO_TM0CNT_L:
+        case IO_TM0CNT_L+1:
+        {
+            uint16_t timer = cpu->get_timer(0);
+            return addr == IO_TM0CNT_L? timer  & 0xff : (timer >> 8) & 0xff;
+            break;
+        }
+
+
+        // timer 1  reload value
+        case IO_TM1CNT_L:
+        case IO_TM1CNT_L+1:
+        {
+            uint16_t timer  = cpu->get_timer(1);
+            return addr == IO_TM1CNT_L? timer  & 0xff : (timer >> 8) & 0xff;
+            break;
+        }
+
+        // timer 2  reload value
+        case IO_TM2CNT_L:
+        case IO_TM2CNT_L+1:
+        {
+            uint16_t timer =  cpu->get_timer(2);
+            return addr == IO_TM2CNT_L? timer  & 0xff : (timer >> 8) & 0xff;
+            break;
+        }
+
+        // timer 3  reload value
+        case IO_TM3CNT_L:
+        case IO_TM3CNT_L+1:
+        {
+            uint16_t timer = cpu->get_timer(3);
+            return addr == IO_TM3CNT_L? timer  & 0xff : (timer >> 8) & 0xff;
             break;
         }
 
@@ -656,6 +695,13 @@ void Mem::write_external(uint32_t addr,uint32_t v,Access_type mode)
                 return;
             }
         }
+
+        case 0xf: // probably should not write here
+        {
+            mem_region = UNDEFINED;
+            return;
+        }
+
     }
     printf("write_external fell through %08x:%08x\n",addr,cpu->get_pc());
     cpu->print_regs();
@@ -1169,13 +1215,13 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         // timer 0 control
         case IO_TM0CNT_H:
         {
-            io[addr] = v;
-            if(is_set(v,7))
+            if(is_set(v,7) && !is_set(io[addr],7))
             {
                 // reload the timer
                 cpu->set_timer(0,handle_read(io,IO_TM0CNT_L,HALF));
                 break;
             }
+            io[addr] = v;
             break;
         } 
 
@@ -1197,11 +1243,11 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         // timer 1 control
         case IO_TM1CNT_H:
         {
-            io[addr] = v;
-            if(is_set(v,7))
+            if(is_set(v,7) && !is_set(io[addr],7))
             {
                 cpu->set_timer(1,handle_read(io,IO_TM1CNT_L,HALF));
             }
+            io[addr] = v;
             break;
         } 
 
@@ -1225,11 +1271,11 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         // timer 2 control
         case IO_TM2CNT_H:
         {
-            io[addr] = v;
-            if(is_set(v,7))
+            if(is_set(v,7) && !is_set(io[addr],7))
             {
                 cpu->set_timer(2,handle_read(io,IO_TM2CNT_L,HALF));
             }
+            io[addr] = v;
             break;
         } 
 
@@ -1251,11 +1297,12 @@ void Mem::write_io_regs(uint32_t addr,uint8_t v)
         // timer 3 control
         case IO_TM3CNT_H:
         {
-            io[addr] = v;
-            if(is_set(v,7))
+            if(is_set(v,7) && !is_set(io[addr],7))
             {
+                //printf("enabled! %08x\n",cpu->get_pc());
                 cpu->set_timer(3,handle_read(io,IO_TM3CNT_L,HALF));
             }
+            io[addr] = v;
             break;
         } 
 

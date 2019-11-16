@@ -168,12 +168,12 @@ std::string Disass::disass_thumb_sp_add(uint16_t opcode)
 
     if(u)
     {
-        return fmt::format("add sp, #{:x}",nn);
+        return fmt::format("add sp, #0x{:x}",nn);
     }
 
     else
     {
-        return fmt::format("add sp, -#{:x}",nn);
+        return fmt::format("add sp, -#0x{:x}",nn);
     }
 }
 

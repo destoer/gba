@@ -248,6 +248,7 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
         if(w)
         {
             regs[rn] = addr;
+            w = false;
         }
         // invert the pre/post
         // as predoing the addr has messed with the meaning
@@ -312,7 +313,7 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
 
         else // store
         {
-            // if base is is fire entry
+            // if base is is first entry
             // store old base
             if(rn == i && i == first)
             {
@@ -332,7 +333,7 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
     }
 
     //writeback higher address if it went up
-    if(w && u)
+    if(w)
     {
         regs[rn] = addr;
     }

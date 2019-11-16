@@ -7,6 +7,7 @@
 #include <iterator>
 #include <functional>
 #include <numeric>
+#include <limits>
 #include <stdint.h>
 #include <assert.h>
 #include <stdio.h>

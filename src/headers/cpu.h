@@ -51,6 +51,7 @@ public:
 
 
     void set_timer(int idx, uint32_t v) { timers[idx] = v; }
+    uint16_t get_timer(int idx) const {return timers[idx]; }
 
     // print all registers for debugging
     // if we go with a graphical debugger
