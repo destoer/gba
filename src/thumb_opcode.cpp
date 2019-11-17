@@ -218,7 +218,7 @@ void Cpu::thumb_branch(uint16_t opcode)
 {
     int offset = (opcode & 0x3ff)*2;
     offset = sign_extend(offset,11);
-    regs[PC] += offset+2;
+    regs[PC] += offset+ARM_HALF_SIZE;
 
     cycle_tick(3); // 2s +1n 
 }
