@@ -886,7 +886,7 @@ void Cpu::service_interrupt()
     // spsr for irq = cpsr
     status_banked[IRQ] = cpsr;
 
-    // lr is next instr + 4 for an irq
+    // lr is next instr + 4 for an irq 
     hi_banked[IRQ][1] = regs[PC] + 4;
 
     // irq mode switch

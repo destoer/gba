@@ -16,44 +16,6 @@ void Display::load_reference_point_regs()
     reference_point_y = mem->handle_read(mem->io,IO_BG2Y_L,WORD);
 }
 
-void Display::advance_line()
-{
-    ly++;
-    mem->io[IO_VCOUNT] = ly; 
-
-    uint8_t lyc = mem->io[IO_DISPSTAT+1];
-
-    // need to fire an interrupt here if enabled
-    if(ly == lyc)
-    {
-        // set the v counter flag
-        mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],2);
-
-        if(is_set(mem->io[IO_DISPSTAT],5))
-        {
-            cpu->request_interrupt(Interrupt::VCOUNT);
-        }
-
-    }
-
-    else
-    {
-        mem->io[IO_DISPSTAT] = deset_bit(mem->io[IO_DISPSTAT],2);
-    }
-
-
-    // if in vdraw render the line
-    if(ly < 160)
-    {
-        render();
-    }
-
-    // exit hblank
-    mem->io[IO_DISPSTAT] = deset_bit(mem->io[IO_DISPSTAT],1);
-    cyc_cnt = 0; // reset cycle counter
-}
-
-
 // renderer helper functions
 uint16_t Display::read_palette(uint32_t pal_num,uint32_t idx)
 {
@@ -283,6 +245,50 @@ void Display::render()
     }
 }
 
+
+
+
+
+void Display::advance_line()
+{
+    ly++;
+    mem->io[IO_VCOUNT] = ly; 
+
+    uint8_t lyc = mem->io[IO_DISPSTAT+1];
+
+    // need to fire an interrupt here if enabled
+    if(ly == lyc)
+    {
+        // set the v counter flag
+        mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],2);
+
+        if(is_set(mem->io[IO_DISPSTAT],5))
+        {
+            cpu->request_interrupt(Interrupt::VCOUNT);
+        }
+
+    }
+
+    else
+    {
+        mem->io[IO_DISPSTAT] = deset_bit(mem->io[IO_DISPSTAT],2);
+    }
+
+
+    // if in vdraw render the line
+    if(ly < 160)
+    {
+        render();
+    }
+
+    // exit hblank
+    mem->io[IO_DISPSTAT] = deset_bit(mem->io[IO_DISPSTAT],1);
+    cyc_cnt = 0; // reset cycle counter
+}
+
+
+
+
 // not 100% sure when interrupts are reqed
 void Display::tick(int cycles)
 {
@@ -315,7 +321,7 @@ void Display::tick(int cycles)
             {
                 advance_line();
 
-                if(ly == 160)
+                if(ly == 160) // 160 we need to vblank
                 {
                     mode = VBLANK;
                     mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],0); // set vblank flag
@@ -362,13 +368,13 @@ void Display::tick(int cycles)
                 // enter hblank (dont set the internal mode here)
                 mem->io[IO_DISPSTAT] = set_bit(mem->io[IO_DISPSTAT],1);
 
-                // does the hblank irq fire here?
+                // does the hblank irq & dma fire here?
                 // if hblank irq enabled
                 if(is_set(mem->io[IO_DISPSTAT],4))
                 {
                     cpu->request_interrupt(Interrupt::HBLANK);
                 }
-                
+                cpu->handle_dma(Dma_type::HBLANK);
             }
 
             break;

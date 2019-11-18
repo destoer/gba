@@ -216,7 +216,7 @@ void Cpu::thumb_load_store_reg(uint16_t opcode)
 
 void Cpu::thumb_branch(uint16_t opcode)
 {
-    int offset = (opcode & 0x3ff)*2;
+    uint32_t offset = (opcode & 0x3ff)*2;
     offset = sign_extend(offset,11);
     regs[PC] += offset+ARM_HALF_SIZE;
 
@@ -299,6 +299,7 @@ void Cpu::thumb_push_pop(uint16_t opcode)
 
         if(lr) 
         {
+            n++;
             regs[SP] -= ARM_WORD_SIZE;
         }
 
@@ -341,7 +342,7 @@ void Cpu::thumb_hi_reg_ops(uint16_t opcode)
     rd = msbd? set_bit(rd,3) : rd;
     rs = is_set(opcode,6)? set_bit(rs,3) : rs;
 
-    int rs_val = regs[rs];
+    uint32_t rs_val = regs[rs];
 
     // if using PC its +4 ahead due to the pipeline
     if(rs == PC)
@@ -349,14 +350,19 @@ void Cpu::thumb_hi_reg_ops(uint16_t opcode)
         rs_val += 2;
     }
 
+
+    uint32_t rd_val = regs[rd];
+
     //2s + 1n total if using pc as rd
     if(rd == PC)
     {
         cycles += 2;
+        // if pc used at plus 4 with bit 0 deset
+        rd_val = (rd_val + 2) & ~1;
     }
 
 
-    // only cmp sets flags!
+    // only cmp sets flags here!
     switch(op)
     {
         case 0b00: // add
@@ -388,7 +394,7 @@ void Cpu::thumb_hi_reg_ops(uint16_t opcode)
             cpsr = is_thumb? set_bit(cpsr,5) : deset_bit(cpsr,5);
 
             // branch
-            regs[PC] = rs_val & ~1;
+            regs[PC] = is_thumb? rs_val & ~1 : rs_val & ~3;
             cycles = 3; // 2s +1n for bx            
             break;
         }
@@ -738,8 +744,8 @@ void Cpu::thumb_mcas_imm(uint16_t opcode)
     {
         case 0b00: // mov
         {
-            set_nz_flag(imm);
             regs[rd] = imm;
+            set_nz_flag(regs[rd]);            
             break;
         }
 

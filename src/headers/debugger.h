@@ -1,6 +1,7 @@
 #pragma once
 #include "forward_def.h"
 #include "lib.h"
+#include "arm.h"
 
 class Debugger
 {
