@@ -25,7 +25,6 @@ void Cpu::init(Display *disp, Mem *mem, Debugger *debug, Disass *disass)
     //arm_fill_pipeline(); // fill the intitial cpu pipeline
     //regs[PC] = 0;
     init_opcode_table();
-    mem->read_mem<uint64_t>(0);
 }
 
 
