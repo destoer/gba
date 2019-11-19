@@ -47,7 +47,7 @@ void Debugger::palette_viewer(std::vector<std::string> command)
 
     for(size_t i = 0; i < pal_screen.size(); i++)
     {
-        pal_screen[i] = convert_color(mem->handle_read(mem->pal_ram,i*2,HALF));
+        pal_screen[i] = convert_color(mem->handle_read<uint16_t>(mem->pal_ram,i*2));
     }
 
 
@@ -161,7 +161,7 @@ void Debugger::tile_viewer(std::vector<std::string> command)
 
 
 
-    uint16_t bg0_cnt = mem->handle_read(mem->io,IO_BG0CNT+bg_num*ARM_WORD_SIZE,HALF);
+    uint16_t bg0_cnt = mem->handle_read<uint16_t>(mem->io,IO_BG0CNT+bg_num*ARM_WORD_SIZE);
     uint32_t bg_tile_data_base = ((bg0_cnt >> 2) & 0x3) * 0x4000;
 
     //256 color one pal 8bpp? or 16 color 16 pal 4bpp 
@@ -180,13 +180,13 @@ void Debugger::tile_viewer(std::vector<std::string> command)
             {
                 // read out the color indexs from the tile
                 uint32_t tile_offset = ((8 * y) / 2) + (x / 2);
-                uint8_t tile = mem->handle_read(mem->vram,tile_addr+tile_offset,BYTE);
+                uint8_t tile = mem->handle_read<uint8_t>(mem->vram,tile_addr+tile_offset);
                 uint32_t idx1 =  tile & 0xf;
                 uint32_t idx2 = (tile >> 4) & 0xf;
 
                 // read out the colors
-                uint16_t color1 = mem->handle_read(mem->pal_ram,(0x20*pal_num)+idx1*2,HALF);
-                uint16_t color2 = mem->handle_read(mem->pal_ram,(0x20*pal_num)+idx2*2,HALF);
+                uint16_t color1 = mem->handle_read<uint16_t>(mem->pal_ram,(0x20*pal_num)+idx1*2);
+                uint16_t color2 = mem->handle_read<uint16_t>(mem->pal_ram,(0x20*pal_num)+idx2*2);
 
 
                 uint32_t pos = ((y + (i/32)*8)) *TILE_X; // calc y offset
@@ -444,7 +444,7 @@ void Debugger::info(std::vector<std::string> command)
                     printf("  %02x",i);
                 }
                 
-                printf("\n\n%08x: %02x ,",addr,mem->read_mem(addr,BYTE));
+                printf("\n\n%08x: %02x ,",addr,mem->read_mem<uint8_t>(addr));
                 for(int i = 1; i < x; i++)
                 {	
                     // makes it "slow" to format but oh well
@@ -454,14 +454,14 @@ void Debugger::info(std::vector<std::string> command)
                     }
                     
                     
-                    printf("%02x ,",mem->read_mem(addr+i,BYTE));
+                    printf("%02x ,",mem->read_mem<uint8_t>(addr+i));
                     
                 }
             }
 
             else // print a single one
             {
-                printf("%x: %08x\n",addr,mem->read_mem(addr,WORD));
+                printf("%x: %08x\n",addr,mem->read_mem<uint32_t>(addr));
             }
         }  
         
@@ -541,12 +541,12 @@ void Debugger::disass_addr(std::vector<std::string> command)
                 std::string s;
                 if(!cpu->is_cpu_thumb())
                 {
-                    s = disass->disass_arm(mem->read_mem(address,WORD),address+ARM_WORD_SIZE);
+                    s = disass->disass_arm(mem->read_mem<uint32_t>(address),address+ARM_WORD_SIZE);
                 }
 
                 else
                 {
-                    s = disass->disass_thumb(mem->read_mem(address,HALF),address+ARM_HALF_SIZE);
+                    s = disass->disass_thumb(mem->read_mem<uint16_t>(address),address+ARM_HALF_SIZE);
                 }
 
                 std::cout << fmt::format("{:08x}: {}\n",address,s);
@@ -558,12 +558,12 @@ void Debugger::disass_addr(std::vector<std::string> command)
             std::string s;
             if(!cpu->is_cpu_thumb())
             {
-                s = disass->disass_arm(mem->read_mem(addr,WORD),addr+ARM_WORD_SIZE);
+                s = disass->disass_arm(mem->read_mem<uint32_t>(addr),addr+ARM_WORD_SIZE);
             }
 
             else
             {
-                s = disass->disass_thumb(mem->read_mem(addr,HALF),addr+ARM_HALF_SIZE);
+                s = disass->disass_thumb(mem->read_mem<uint16_t>(addr),addr+ARM_HALF_SIZE);
             }
 
             std::cout << fmt::format("{:08x}: {}\n",addr,s);
@@ -599,7 +599,7 @@ void Debugger::write(std::vector<std::string> command)
         int value = std::stoll(command[2],nullptr,16);
 
         // add length specifier later
-        mem->write_mem(addr,value,WORD);
+        mem->write_mem<uint32_t>(addr,value);
 
         restore_breakpoints();
     }

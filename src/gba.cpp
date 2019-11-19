@@ -289,7 +289,7 @@ void GBA::handle_input()
 // for io after the test 
 void GBA::button_event(Button b, bool down)
 {
-	uint16_t keyinput = mem.handle_read(mem.io,IO_KEYINPUT&IO_MASK,HALF);
+	uint16_t keyinput = mem.handle_read<uint16_t>(mem.io,IO_KEYINPUT&IO_MASK);
 
 	int button = static_cast<int>(b);
 
@@ -305,5 +305,5 @@ void GBA::button_event(Button b, bool down)
 		keyinput = set_bit(keyinput,button);
 	}
 
-	mem.handle_write(mem.io,IO_KEYINPUT&IO_MASK,keyinput,HALF);
+	mem.handle_write<uint16_t>(mem.io,IO_KEYINPUT&IO_MASK,keyinput);
 }

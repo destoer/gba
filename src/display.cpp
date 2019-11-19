@@ -12,14 +12,14 @@ void Display::init(Mem *mem, Cpu *cpu)
 // need to update these during vblank?
 void Display::load_reference_point_regs()
 {
-    reference_point_x = mem->handle_read(mem->io,IO_BG2X_L,WORD);
-    reference_point_y = mem->handle_read(mem->io,IO_BG2Y_L,WORD);
+    reference_point_x = mem->handle_read<uint32_t>(mem->io,IO_BG2X_L);
+    reference_point_y = mem->handle_read<uint32_t>(mem->io,IO_BG2Y_L);
 }
 
 // renderer helper functions
 uint16_t Display::read_palette(uint32_t pal_num,uint32_t idx)
 {
-    return mem->handle_read(mem->pal_ram,(0x20*pal_num)+idx*2,HALF);        
+    return mem->handle_read<uint16_t>(mem->pal_ram,(0x20*pal_num)+idx*2);        
 }
 
 
@@ -48,7 +48,7 @@ void Display::read_tile(uint32_t tile[],bool col_256,uint32_t base,uint32_t pal_
         {
             // read out the color indexs from the tile
             uint32_t tile_offset = (x_pix / 2);
-            uint8_t tile_data = mem->handle_read(mem->vram,addr+tile_offset,BYTE);
+            uint8_t tile_data = mem->handle_read<uint8_t>(mem->vram,addr+tile_offset);
             uint32_t idx1 =  tile_data & 0xf;
             uint32_t idx2 = (tile_data >> 4) & 0xf;
 
@@ -68,7 +68,7 @@ void Display::read_tile(uint32_t tile[],bool col_256,uint32_t base,uint32_t pal_
 void Display::render_text(int id)
 {
     uint32_t bg_cnt_addr = IO_BG0CNT + id * ARM_WORD_SIZE;
-    uint16_t bg0_cnt = mem->handle_read(mem->io,bg_cnt_addr,HALF);
+    uint16_t bg0_cnt = mem->handle_read<uint16_t>(mem->io,bg_cnt_addr);
     uint32_t bg_tile_data_base = ((bg0_cnt >> 2) & 0x3) * 0x4000;
     uint32_t bg_map_base =  ((bg0_cnt >> 8) & 0x1f) * 0x800;
     uint32_t size = (bg0_cnt >> 14) & 0x3;  // <-- need to take this more into account!
@@ -81,8 +81,8 @@ void Display::render_text(int id)
 
     uint32_t scroll_x_addr = IO_BG0HOFS + id * ARM_WORD_SIZE;
     uint32_t scroll_y_addr = IO_BG0VOFS + id * ARM_WORD_SIZE;
-    uint32_t scroll_x = mem->handle_read(mem->io,scroll_x_addr,HALF) & 511;
-    uint32_t scroll_y = mem->handle_read(mem->io,scroll_y_addr,HALF) & 511;
+    uint32_t scroll_x = mem->handle_read<uint16_t>(mem->io,scroll_x_addr) & 511;
+    uint32_t scroll_y = mem->handle_read<uint16_t>(mem->io,scroll_y_addr) & 511;
 
     uint32_t line = (ly + scroll_y) % 512;
 
@@ -137,7 +137,7 @@ void Display::render_text(int id)
         }
 
         // read out the bg entry and rip all the information we need about the tile
-        uint16_t bg_map_entry = mem->handle_read(mem->vram,bg_map_base+bg_map_offset,HALF);
+        uint16_t bg_map_entry = mem->handle_read<uint16_t>(mem->vram,bg_map_base+bg_map_offset);
                     
 
         bool x_flip = is_set(bg_map_entry,10);
@@ -177,7 +177,7 @@ void Display::render()
 {
     
 
-    uint16_t dispcnt = mem->handle_read(mem->io,IO_DISPCNT,HALF);
+    uint16_t dispcnt = mem->handle_read<uint16_t>(mem->io,IO_DISPCNT);
     int render_mode = dispcnt & 0x7;
 
 
@@ -216,7 +216,7 @@ void Display::render()
             // what is the enable for this?
             for(int x = 0; x < X; x++)
             {
-                uint32_t c = convert_color(mem->handle_read(mem->vram,(ly*X*2)+x*2,HALF));
+                uint32_t c = convert_color(mem->handle_read<uint16_t>(mem->vram,(ly*X*2)+x*2));
                 screen[ly][x] = c;
             }
             break;
@@ -229,7 +229,7 @@ void Display::render()
             for(int x = 0; x < X; x++)
             {
                 uint8_t idx = mem->vram[(ly*X)+x];
-                uint16_t color = mem->handle_read(mem->pal_ram,(idx*2),HALF);
+                uint16_t color = mem->handle_read<uint16_t>(mem->pal_ram,(idx*2));
                 uint32_t c = convert_color(color);
                 screen[ly][x] = c;
             }

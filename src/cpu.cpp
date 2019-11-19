@@ -25,6 +25,7 @@ void Cpu::init(Display *disp, Mem *mem, Debugger *debug, Disass *disass)
     //arm_fill_pipeline(); // fill the intitial cpu pipeline
     //regs[PC] = 0;
     init_opcode_table();
+    mem->read_mem<uint64_t>(0);
 }
 
 
@@ -303,7 +304,7 @@ void Cpu::tick_timers(int cycles)
     for(int i = 0; i < 4; i++)
     {
         int offset = i*ARM_WORD_SIZE;
-        uint16_t cnt = mem->handle_read(mem->io,IO_TM0CNT_H+offset,HALF);
+        uint16_t cnt = mem->handle_read<uint16_t>(mem->io,IO_TM0CNT_H+offset);
 
         if(!is_set(cnt,7)) // timer is not enabled
         {
@@ -329,7 +330,7 @@ void Cpu::tick_timers(int cycles)
             if(timers[i] >= max_cyc) // overflowed
             {
                 // add the reload values
-                timers[i] = mem->handle_read(mem->io,IO_TM0CNT_L+offset,HALF) + timers[i] % max_cyc;
+                timers[i] = mem->handle_read<uint16_t>(mem->io,IO_TM0CNT_L+offset) + timers[i] % max_cyc;
                 if(is_set(cnt,6))
                 {
                     request_interrupt(interrupt_table[i]);
@@ -854,9 +855,9 @@ uint32_t Cpu::logical_eor(uint32_t v1, uint32_t v2, bool s)
 // write the interrupt req bit
 void Cpu::request_interrupt(Interrupt interrupt)
 {
-    uint16_t io_if = mem->handle_read(mem->io,IO_IF,HALF);
+    uint16_t io_if = mem->handle_read<uint16_t>(mem->io,IO_IF);
     io_if = set_bit(io_if,static_cast<uint32_t>(interrupt));
-    mem->handle_write(mem->io,IO_IF,io_if ,HALF);
+    mem->handle_write<uint16_t>(mem->io,IO_IF,io_if);
 }
 
 
@@ -868,8 +869,8 @@ void Cpu::do_interrupts()
     }
 
 
-    uint16_t interrupt_enable = mem->handle_read(mem->io,IO_IE,HALF);
-    uint16_t interrupt_flag = mem->handle_read(mem->io,IO_IF,HALF);
+    uint16_t interrupt_enable = mem->handle_read<uint16_t>(mem->io,IO_IE);
+    uint16_t interrupt_flag = mem->handle_read<uint16_t>(mem->io,IO_IF);
 
     // the handler will find out what fired for us!
     if((mem->get_ime() & interrupt_enable & interrupt_flag) != 0)
@@ -916,10 +917,10 @@ void Cpu::handle_dma(Dma_type req_type)
 
     uint16_t dma_cnt[4];
 
-    dma_cnt[0] = mem->handle_read(mem->io,IO_DMA0CNT_H,HALF);
-    dma_cnt[1] = mem->handle_read(mem->io,IO_DMA1CNT_H,HALF);
-    dma_cnt[2] = mem->handle_read(mem->io,IO_DMA2CNT_H,HALF);
-    dma_cnt[3] = mem->handle_read(mem->io,IO_DMA3CNT_H,HALF);
+    dma_cnt[0] = mem->handle_read<uint16_t>(mem->io,IO_DMA0CNT_H);
+    dma_cnt[1] = mem->handle_read<uint16_t>(mem->io,IO_DMA1CNT_H);
+    dma_cnt[2] = mem->handle_read<uint16_t>(mem->io,IO_DMA2CNT_H);
+    dma_cnt[3] = mem->handle_read<uint16_t>(mem->io,IO_DMA3CNT_H);
 
     static constexpr uint32_t zero_table[4] = {0x4000,0x4000,0x4000,0x10000};
     if(req_type == Dma_type::VBLANK || req_type == Dma_type::HBLANK || req_type == Dma_type::IMMEDIATE)
@@ -937,7 +938,7 @@ void Cpu::handle_dma(Dma_type req_type)
 
                     if(is_set(dma_cnt[i],9)) // repeat bit so reload word count
                     {
-                        dma_regs[i].nn = mem->handle_read(mem->io,base_addr+8,HALF);
+                        dma_regs[i].nn = mem->handle_read<uint16_t>(mem->io,base_addr+8);
                     }
 
                     // if a zero len transfer it uses the max len for that dma
@@ -950,7 +951,7 @@ void Cpu::handle_dma(Dma_type req_type)
 
                     do_dma(dma_cnt[i],req_type,i);
                     uint32_t cnt_addr = base_addr + 10;
-                    mem->handle_write(mem->io,cnt_addr,dma_cnt[i],HALF); // write back the control reg!
+                    mem->handle_write<uint16_t>(mem->io,cnt_addr,dma_cnt[i]); // write back the control reg!
                 }
             }
         }
@@ -992,7 +993,6 @@ void Cpu::do_dma(uint16_t &dma_cnt,Dma_type req_type, int dma_number)
 
     bool is_half = !is_set(dma_cnt,10);
     uint32_t size = is_half? ARM_HALF_SIZE : ARM_WORD_SIZE;
-    Access_type type = is_half? HALF : WORD;
 
     source &= 0x0fffffff;
     dest &= 0x0fffffff;
@@ -1000,8 +1000,18 @@ void Cpu::do_dma(uint16_t &dma_cnt,Dma_type req_type, int dma_number)
     for(size_t i = 0; i < dma_reg.nn; i++)
     {
         uint32_t offset = i * size;
-        uint32_t v = mem->read_memt(source+offset,type);
-        mem->write_memt(dest+offset,v,type);
+
+        if(is_half)
+        {
+            uint16_t v = mem->read_memt<uint16_t>(source+offset);
+            mem->write_memt<uint16_t>(dest+offset,v);
+        }
+
+        else
+        {
+            uint32_t v = mem->read_memt<uint32_t>(source+offset);
+            mem->write_memt<uint32_t>(dest+offset,v);
+        }
     }
 
     static constexpr Interrupt dma_interrupt[4] = {Interrupt::DMA0,Interrupt::DMA1,Interrupt::DMA2,Interrupt::DMA3}; 
@@ -1069,7 +1079,7 @@ void Cpu::do_dma(uint16_t &dma_cnt,Dma_type req_type, int dma_number)
         case 3: // incremnt + reload
         {
             uint32_t base_addr = IO_DMA0SAD + dma_number * 12;
-            dma_reg.dst = mem->handle_read(mem->io,base_addr+4,WORD);
+            dma_reg.dst = mem->handle_read<uint32_t>(mem->io,base_addr+4);
             dma_reg.dst += dma_reg.nn * size;
             break;
         }

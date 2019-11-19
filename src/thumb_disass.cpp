@@ -479,7 +479,7 @@ std::string Disass::disass_thumb_long_bl(uint16_t opcode)
 
     // 4 byte instr made up of two "sub ops"
     int offset1 = opcode & 0x7ff;
-    uint16_t opcode2 = mem->read_mem(pc,HALF);
+    uint16_t opcode2 = mem->read_mem<uint16_t>(pc);
     pc += ARM_HALF_SIZE;
     int offset2 = opcode2 & 0x7ff;
 

@@ -6,9 +6,9 @@
 // if there is a pipeline stall (whenever pc changes besides a fetch)
 void Cpu::arm_fill_pipeline() // need to verify this...
 {
-    pipeline[0] = mem->read_memt(regs[PC],WORD);
+    pipeline[0] = mem->read_memt<uint32_t>(regs[PC]);
     regs[PC] += ARM_WORD_SIZE;
-    pipeline[1] = mem->read_memt(regs[PC],WORD);
+    pipeline[1] = mem->read_memt<uint32_t>(regs[PC]);
     regs[PC] += ARM_WORD_SIZE;
 }
 
@@ -16,23 +16,11 @@ void Cpu::arm_fill_pipeline() // need to verify this...
 // pipeline
 uint32_t Cpu::fetch_arm_opcode()
 {
-    /*
-    // read next opcode out of the pipeline
-    uint32_t opcode = prefetch[0];
-    prefetch[0] = prefetch[1]; // move in next instr
-    regs[PC] += ARM_WORD_SIZE;
-    // read the next instruction
-    prefetch[1] = mem->read_memt(regs[PC],WORD); 
-    return opcode;
-    */
-
-
-
 
     // ignore the pipeline for now
     regs[PC] &= ~3; // algin
 
-    uint32_t opcode = mem->read_memt(regs[PC],WORD);
+    uint32_t opcode = mem->read_memt<uint32_t>(regs[PC]);
     regs[PC] += ARM_WORD_SIZE;
     return opcode;
 }
@@ -49,9 +37,9 @@ void Cpu::execute_arm_opcode(uint32_t instr)
 void Cpu::exec_arm()
 {
 #ifdef DEBUG
-    if(debug->breakpoint_x.is_hit(regs[PC],mem->read_mem(regs[PC],WORD),WORD) || debug->step_instr)
+    if(debug->breakpoint_x.is_hit<uint32_t>(regs[PC],mem->read_mem<uint32_t>(regs[PC])) || debug->step_instr)
     {
-        std::cout << fmt::format("{:08x}: {}\n",regs[PC],disass->disass_arm(mem->read_mem(regs[PC],WORD),regs[PC]+ARM_WORD_SIZE));
+        std::cout << fmt::format("{:08x}: {}\n",regs[PC],disass->disass_arm(mem->read_mem<uint32_t>(regs[PC]),regs[PC]+ARM_WORD_SIZE));
         debug->enter_debugger();
     }
 #endif
@@ -181,23 +169,23 @@ void Cpu::arm_swap(uint32_t opcode)
     int rd = (opcode >> 12) & 0xf;
     int rn = (opcode >> 16) & 0xf;
 
-    Access_type type = is_set(opcode,22) ? BYTE : WORD;
+   bool is_byte = is_set(opcode,22);
 
     // swp works propely even if rm and rn are the same
     uint32_t tmp; 
 
     // rd = [rn], [rn] = rm
-    if(type == BYTE)
+    if(is_byte)
     {
-        tmp = mem->read_memt(regs[rn],BYTE);
-        mem->write_memt(regs[rn],regs[rm],BYTE);
+        tmp = mem->read_memt<uint8_t>(regs[rn]);
+        mem->write_memt<uint8_t>(regs[rn],regs[rm]);
     }
 
     else
     {
-        tmp = mem->read_memt(regs[rn],WORD);
+        tmp = mem->read_memt<uint32_t>(regs[rn]);
         regs[rd] = rotr(regs[rd],(regs[rn]&3)*8);
-        mem->write_memt(regs[rn],regs[rm],WORD);
+        mem->write_memt<uint32_t>(regs[rn],regs[rm]);
     }
 
 
@@ -293,7 +281,7 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
             {
                w = false;
             }
-            regs[i] = mem->read_memt(addr,WORD);
+            regs[i] = mem->read_memt<uint32_t>(addr);
 
             if(i == PC && s) // if pc is in list and s bit set  cpsr = spsr
             {
@@ -317,12 +305,12 @@ void Cpu::arm_block_data_transfer(uint32_t opcode)
             // store old base
             if(rn == i && i == first)
             {
-                mem->write_memt(addr,old_base,WORD);
+                mem->write_memt<uint32_t>(addr,old_base);
             }
 
             else
             {
-                mem->write_memt(addr,regs[i],WORD);
+                mem->write_memt<uint32_t>(addr,regs[i]);
             }
         }
 
@@ -898,21 +886,21 @@ void Cpu::arm_hds_data_transfer(uint32_t opcode)
 
             case 1: // ldrh
             {
-                regs[rd] = mem->read_memt(addr,HALF);
+                regs[rd] = mem->read_memt<uint16_t>(addr);
                 cycle_tick(cycles+3); // 1s + 1n + 1i
                 break;
             }
 
             case 2: // ldrsb
             {
-                regs[rd] = sign_extend(mem->read_memt(addr,BYTE),8);
+                regs[rd] = sign_extend(mem->read_memt<uint8_t>(addr),8);
                 cycle_tick(cycles+3); // 1s + 1n + 1i
                 break;
             }
 
             case 3: // ldrsh
             {
-                regs[rd] = sign_extend(mem->read_memt(addr,HALF),16);
+                regs[rd] = sign_extend(mem->read_memt<uint16_t>(addr),16);
                 cycle_tick(cycles+3); // 1s + 1n + 1i
                 break;
             }
@@ -925,7 +913,7 @@ void Cpu::arm_hds_data_transfer(uint32_t opcode)
         {
             case 1: // strh
             {
-                mem->write_memt(addr,value,HALF);
+                mem->write_memt<uint16_t>(addr,value);
                 cycle_tick(2); // 2n cycles
                 break;
             }
@@ -1013,7 +1001,7 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
 
 
     //byte / word bit
-    Access_type mode = is_set(opcode,22)? BYTE: WORD;
+    bool is_byte = is_set(opcode,22);
 
     // up or down bit decides wether we add
     // or subtract the offest
@@ -1031,14 +1019,14 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
     // perform the specifed memory access
     if(load) // ldr
     {
-        if(mode == BYTE)
+        if(is_byte)
         {
-            regs[rd] = mem->read_memt(addr,mode);
+            regs[rd] = mem->read_memt<uint8_t>(addr);
         }
 
         else // ldr and swp use rotated reads
         {
-            regs[rd] = mem->read_memt(addr,mode);
+            regs[rd] = mem->read_memt<uint32_t>(addr);
             regs[rd] = rotr(regs[rd],(addr&3)*8);
         }
         cycles = 3; // 1s + 1n + 1i
@@ -1060,8 +1048,16 @@ void Cpu::arm_single_data_transfer(uint32_t opcode)
             v += 8;
         }
 
-        mem->write_memt(addr,v,mode);
-
+		if(is_byte)
+		{
+			mem->write_memt<uint8_t>(addr,v);
+		}
+		
+		
+		else
+		{
+			mem->write_memt<uint32_t>(addr,v);
+		}
         cycles = 2; // 2 N cycles for a store 
 
     }

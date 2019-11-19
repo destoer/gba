@@ -78,25 +78,16 @@ public:
             break_enabled = true;
         }
 
-        bool is_hit(uint32_t addr, uint32_t value, Access_type mode)
+        template<typename access_type>
+        bool is_hit(uint32_t addr, access_type value)
         {
-            uint32_t v;
-            switch(mode)
-            {
-                case BYTE: v = (uint8_t)value; break;
-                case HALF: v = (uint16_t)value; break;
-                case WORD: v = value; break;
-                default: puts("breakpoint_hit mode error!"); exit(1);
-            }
-
-
             if(!break_enabled)
             {
                 return false;
             }
 
             // value enabled and its not equal
-            else if(value_enabled && v != this->value)
+            else if(value_enabled && value != this->value)
             {
                 return false;
             }
