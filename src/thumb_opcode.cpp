@@ -357,8 +357,8 @@ void Cpu::thumb_hi_reg_ops(uint16_t opcode)
     if(rd == PC)
     {
         cycles += 2;
-        // if pc used at plus 4 with bit 0 deset
-        rd_val = (rd_val + 2) & ~1;
+        // if pc used at plus 4
+        rd_val += 2;
     }
 
 
@@ -432,7 +432,7 @@ void Cpu::thumb_alu(uint16_t opcode)
         case 0x2: // lsl
         {
             bool c = is_set(cpsr,C_BIT);
-            regs[rd] = barrel_shift(LSL,regs[rd],regs[rs]&0xff,c,false);
+            regs[rd] = lsl(regs[rd],regs[rs]&0xff,c);
             set_nz_flag(regs[rd]);
             cpsr = c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
             cycle_tick(2); // 1s + 1i
@@ -442,7 +442,7 @@ void Cpu::thumb_alu(uint16_t opcode)
         case 0x3: // lsr 
         {
             bool c = is_set(cpsr,C_BIT);
-            regs[rd] = barrel_shift(LSR,regs[rd],regs[rs]&0xff,c,false);
+            regs[rd] = lsr(regs[rd],regs[rs]&0xff,c,false);
             set_nz_flag(regs[rd]);
             cpsr = c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
             cycle_tick(2); // 1s + 1i
@@ -452,7 +452,7 @@ void Cpu::thumb_alu(uint16_t opcode)
         case 0x4: // asr
         {
             bool c = is_set(cpsr,C_BIT);
-            regs[rd] = barrel_shift(ASR,regs[rd],regs[rs]&0xff,c,false);
+            regs[rd] = asr(regs[rd],regs[rs]&0xff,c,false);
             set_nz_flag(regs[rd]);
             cpsr = c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);   
             cycle_tick(2); // 1s + 1i
@@ -472,19 +472,10 @@ void Cpu::thumb_alu(uint16_t opcode)
         }
 
         
-        case 0xe: // bic
-        {
-            regs[rd] &= ~regs[rs];
-            set_nz_flag(regs[rd]);
-            cycle_tick(1); // 1 s cycle for bic
-            break;
-        }
-
-
         case 0x7: // ror
         {
             bool c = is_set(cpsr,C_BIT);
-            regs[rd] = barrel_shift(ROR,regs[rd],regs[rs]&0xff,c,false);
+            regs[rd] = ror(regs[rd],regs[rs]&0xff,c,false);
             set_nz_flag(regs[rd]);
             cpsr = c? set_bit(cpsr,C_BIT) : deset_bit(cpsr,C_BIT);
             cycle_tick(2); // 1s + 1i
@@ -530,6 +521,15 @@ void Cpu::thumb_alu(uint16_t opcode)
             set_nz_flag(regs[rd]);
             cpsr = deset_bit(cpsr,C_BIT);
             cycle_tick(1); // needs timing fix
+            break;
+        }
+
+
+        case 0xe: // bic
+        {
+            regs[rd] &= ~regs[rs];
+            set_nz_flag(regs[rd]);
+            cycle_tick(1); // 1 s cycle for bic
             break;
         }
 
@@ -648,7 +648,7 @@ void Cpu::thumb_add_sub(uint16_t opcode)
 {
     int rd = opcode & 0x7;
     int rs = (opcode >> 3) & 0x7;
-    int rn = (opcode  >> 6) & 0x7; // can also be 3 bit imm
+    int rn = (opcode >> 6) & 0x7; // can also be 3 bit imm
     int op = (opcode >> 9) & 0x3;
 
     switch(op)
@@ -683,12 +683,12 @@ void Cpu::thumb_long_bl(uint16_t opcode)
 {
     bool first = !is_set(opcode,11);
 
-    int offset = opcode & 0x7ff; // offset is 11 bits
+    int32_t offset = opcode & 0x7ff; // offset is 11 bits
 
     if(first)
     {
         // sign extend offset shifted by 12
-        // add to pc plus 4 stoe in lr
+        // add to pc plus 4 store in lr
         offset <<= 12;
         offset = sign_extend(offset,23);
         regs[LR] = (regs[PC]+2) + offset;
@@ -712,7 +712,6 @@ void Cpu::thumb_mov_reg_shift(uint16_t opcode)
 {
     int rd = opcode & 0x7;
     int rs = (opcode >> 3) & 0x7;
-
     int n = (opcode >> 6) & 0x1f;
 
     Shift_type type = static_cast<Shift_type>((opcode >> 11) & 0x3);
@@ -734,11 +733,8 @@ void Cpu::thumb_mov_reg_shift(uint16_t opcode)
 void Cpu::thumb_mcas_imm(uint16_t opcode)
 {
     int op = (opcode >> 11) & 0x3;
-
     int rd = (opcode >> 8) & 0x7;
-
     uint8_t imm = opcode & 0xff;
-
 
     switch(op)
     {
@@ -749,13 +745,11 @@ void Cpu::thumb_mcas_imm(uint16_t opcode)
             break;
         }
 
-
         case 0b01: //cmp
         {
             sub(regs[rd],imm,true);
             break;
         }
-
 
         case 0b10: // add
         {
@@ -766,15 +760,6 @@ void Cpu::thumb_mcas_imm(uint16_t opcode)
         case 0b11: // sub
         {
             regs[rd] = sub(regs[rd],imm,true);
-            break;
-        }
-
-
-
-        default:
-        {
-            puts("unknown mcas imm");
-            thumb_unknown(opcode);
             break;
         }
     }
@@ -802,7 +787,6 @@ void Cpu::thumb_cond_branch(uint16_t opcode)
     {
         cycle_tick(1);
     }
-
 }
 
 void Cpu::thumb_ldr_pc(uint16_t opcode)
@@ -821,5 +805,4 @@ void Cpu::thumb_ldr_pc(uint16_t opcode)
 
     // takes 2s + 1n cycles
     cycle_tick(3);
-
 }

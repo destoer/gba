@@ -236,7 +236,17 @@ void Display::render()
             break;
         }
 
-
+/*
+        case 0x5: // same as mode 3 but lower screen size?
+        {
+            for(int x = 0; x < X; x++)
+            {
+                uint32_t c = convert_color(mem->handle_read<uint16_t>(mem->vram,(ly*X*2)+x*2));
+                screen[ly][x] = c;
+            }
+            break;            
+        }
+*/
         default: // mode ?
         {
             printf("unknown ppu mode %08x\n",render_mode);
@@ -310,6 +320,14 @@ void Display::tick(int cycles)
                     cpu->request_interrupt(Interrupt::HBLANK);
                 }
                 cpu->handle_dma(Dma_type::HBLANK);
+
+
+
+                if(ly >= 2)
+                {
+                    cpu->handle_dma(Dma_type::SPECIAL,3);
+                }
+
             }
             break;
         }
@@ -375,6 +393,20 @@ void Display::tick(int cycles)
                     cpu->request_interrupt(Interrupt::HBLANK);
                 }
                 cpu->handle_dma(Dma_type::HBLANK);
+
+
+                // disable video capture mode dma
+                // does it need to be enabled before a disable?
+                if(ly == 162)
+                {
+                    uint16_t dma_cnt = mem->handle_read<uint16_t>(mem->io,IO_DMA3CNT_H);
+                    Dma_type dma_type = static_cast<Dma_type>((dma_cnt >> 12) & 0x3);
+                    if(dma_type == Dma_type::SPECIAL)
+                    {
+                        mem->handle_write<uint16_t>(mem->io,IO_DMA3CNT_H,deset_bit(dma_cnt,15));
+                    }
+                }
+
             }
 
             break;

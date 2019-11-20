@@ -126,7 +126,7 @@ inline uint32_t lsl(uint32_t v, uint32_t n, bool &carry)
 {
     if(!n) return v;
 
-    if(n >= 32)
+    else if(n >= 32)
     {
 
         if(n >= 33)

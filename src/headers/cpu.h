@@ -74,7 +74,7 @@ public:
 
     Dma_reg dma_regs[4];
 
-    void handle_dma(Dma_type req_type);
+    void handle_dma(Dma_type req_type, int special_dma = -1);
 private:
 
     using ARM_OPCODE_FPTR = void (Cpu::*)(uint32_t opcode);
@@ -148,9 +148,8 @@ private:
     void service_interrupt();
 
     // dma
-    //void handle_dma(Dma_type req_type);
+    //handle_dma(Dma_type req_type, int special_dma = -1);
     void do_dma(uint16_t &dma_cnt,Dma_type req_type, int dma_number);
-
 
     // timers
     void tick_timers(int cycles);

@@ -905,7 +905,7 @@ void Cpu::service_interrupt()
 // check if for each dma if any of the start timing conds have been met
 // should store all the dma information in struct so its nice to access
 // also find out when dmas are actually processed?
-void Cpu::handle_dma(Dma_type req_type)
+void Cpu::handle_dma(Dma_type req_type, int special_dma)
 {
 
 
@@ -914,54 +914,57 @@ void Cpu::handle_dma(Dma_type req_type)
         return; 
     }
 
-    uint16_t dma_cnt[4];
-
-    dma_cnt[0] = mem->handle_read<uint16_t>(mem->io,IO_DMA0CNT_H);
-    dma_cnt[1] = mem->handle_read<uint16_t>(mem->io,IO_DMA1CNT_H);
-    dma_cnt[2] = mem->handle_read<uint16_t>(mem->io,IO_DMA2CNT_H);
-    dma_cnt[3] = mem->handle_read<uint16_t>(mem->io,IO_DMA3CNT_H);
 
     static constexpr uint32_t zero_table[4] = {0x4000,0x4000,0x4000,0x10000};
-    if(req_type == Dma_type::VBLANK || req_type == Dma_type::HBLANK || req_type == Dma_type::IMMEDIATE)
+    for(int i = 0; i < 4; i++)
     {
-        for(int i = 0; i < 4; i++)
+
+        uint32_t cnt_addr = IO_DMA0CNT_H+i*12;
+        uint16_t dma_cnt = mem->handle_read<uint16_t>(mem->io,cnt_addr);
+
+        if(is_set(dma_cnt,15)) // dma is enabled
         {
-            if(is_set(dma_cnt[i],15)) // dma is enabled
+            Dma_type dma_type = static_cast<Dma_type>((dma_cnt >> 12) & 0x3);
+
+
+            bool is_triggered = false;
+
+            // speical dma modes on trigger for their respective dma modes
+            if(dma_type == Dma_type::SPECIAL)
             {
-                Dma_type dma_type = static_cast<Dma_type>((dma_cnt[i] >> 12) & 0x3);
-
-                if(req_type == dma_type)
+                if(i == special_dma)
                 {
-                    uint32_t base_addr = IO_DMA0SAD + i * 12;
-
-
-                    if(is_set(dma_cnt[i],9)) // repeat bit so reload word count
-                    {
-                        dma_regs[i].nn = mem->handle_read<uint16_t>(mem->io,base_addr+8);
-                    }
-
-                    // if a zero len transfer it uses the max len for that dma
-                    if(dma_regs[i].nn == 0)
-                    {
-                        dma_regs[i].nn = zero_table[i];
-                    }
-
-
-
-                    do_dma(dma_cnt[i],req_type,i);
-                    uint32_t cnt_addr = base_addr + 10;
-                    mem->handle_write<uint16_t>(mem->io,cnt_addr,dma_cnt[i]); // write back the control reg!
+                    is_triggered = true;
                 }
             }
+
+            else
+            {
+                is_triggered = true;
+            }
+
+            if(is_triggered)
+            {
+                uint32_t word_count_addr = IO_DMA0CNT_L + i * 12;
+
+
+                if(is_set(dma_cnt,9)) // repeat bit so reload word count
+                {
+                    dma_regs[i].nn = mem->handle_read<uint16_t>(mem->io,word_count_addr);
+                }
+
+                 // if a zero len transfer it uses the max len for that dma
+                if(dma_regs[i].nn == 0)
+                {
+                    dma_regs[i].nn = zero_table[i];
+                }
+
+
+
+                do_dma(dma_cnt,req_type,i);
+                mem->handle_write<uint16_t>(mem->io,cnt_addr,dma_cnt); // write back the control reg!
+            }
         }
-    }
-    
-    // will have to check the special bit seperately here...
-    // we will only check a specific register here!
-    else
-    {
-        printf("unimplemented dma special type!");
-        exit(1);
     }
 }
 
@@ -971,9 +974,11 @@ void Cpu::handle_dma(Dma_type req_type)
 // also need to handle repeats!
 
 // this needs to know the dma number aswell as the type of dma
-// <-- dma is halting my emulator haha
+// <-- how does gamepak dma work
+// this seriously needs a refeactor
 void Cpu::do_dma(uint16_t &dma_cnt,Dma_type req_type, int dma_number)
 {
+
 
     if(is_set(dma_cnt,11))
     {
@@ -1077,8 +1082,8 @@ void Cpu::do_dma(uint16_t &dma_cnt,Dma_type req_type, int dma_number)
 
         case 3: // incremnt + reload
         {
-            uint32_t base_addr = IO_DMA0SAD + dma_number * 12;
-            dma_reg.dst = mem->handle_read<uint32_t>(mem->io,base_addr+4);
+            uint32_t dad_addr = IO_DMA0DAD + dma_number * 12;
+            dma_reg.dst = mem->handle_read<uint32_t>(mem->io,dad_addr);
             dma_reg.dst += dma_reg.nn * size;
             break;
         }

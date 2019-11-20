@@ -950,7 +950,7 @@ uint8_t Mem::read_io_regs(uint32_t addr)
 //access handler for reads (for non io mapped mem) 
 // need checks for endianess here for completeness
 template<typename access_type>
-inline access_type Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr)
+access_type Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr)
 {
 
 #ifdef DEBUG // bounds check the memory access
@@ -976,7 +976,7 @@ inline access_type Mem::handle_read(std::vector<uint8_t> &buf,uint32_t addr)
 
  // read mem unticked
 template<typename access_type>
-inline access_type Mem::read_mem(uint32_t addr)
+access_type Mem::read_mem(uint32_t addr)
 {
 
 
@@ -1019,7 +1019,7 @@ inline access_type Mem::read_mem(uint32_t addr)
 
 // timed memory access
 template<typename access_type>
-inline access_type Mem::read_memt(uint32_t addr)
+access_type Mem::read_memt(uint32_t addr)
 {
     access_type v = read_mem<access_type>(addr);
     tick_mem_access<access_type>();
@@ -1031,7 +1031,7 @@ inline access_type Mem::read_memt(uint32_t addr)
 // write mem
  // write mem unticked
 template<typename access_type>
-inline void Mem::write_mem(uint32_t addr,access_type v)
+void Mem::write_mem(uint32_t addr,access_type v)
 {
 
 #ifdef DEBUG
@@ -1067,7 +1067,7 @@ inline void Mem::write_mem(uint32_t addr,access_type v)
 
 // ticked access
 template<typename access_type>
-inline void Mem::write_memt(uint32_t addr,access_type v)
+void Mem::write_memt(uint32_t addr,access_type v)
 {
     write_mem<access_type>(addr,v);
     tick_mem_access<access_type>();
@@ -1076,7 +1076,7 @@ inline void Mem::write_memt(uint32_t addr,access_type v)
 
 
 template<>
-inline void Mem::tick_mem_access<uint8_t>()
+void Mem::tick_mem_access<uint8_t>()
 {
     // should unmapped addresses still tick a cycle?
     if(mem_region != UNDEFINED)
@@ -1087,7 +1087,7 @@ inline void Mem::tick_mem_access<uint8_t>()
 
 
 template<>
-inline void Mem::tick_mem_access<uint16_t>()
+void Mem::tick_mem_access<uint16_t>()
 {
     // should unmapped addresses still tick a cycle?
     if(mem_region != UNDEFINED)
@@ -1098,7 +1098,7 @@ inline void Mem::tick_mem_access<uint16_t>()
 
 
 template<>
-inline void Mem::tick_mem_access<uint32_t>()
+void Mem::tick_mem_access<uint32_t>()
 {
     // should unmapped addresses still tick a cycle?
     if(mem_region != UNDEFINED)
@@ -1117,7 +1117,7 @@ access_type Mem::read_external(uint32_t addr)
     uint32_t len =  rom.size();
     if((addr&0x1FFFFFF) > len)
     {
-        printf("rom read out of range: %08x:%08x:%08x\n",addr&0x1FFFFFF,len,cpu->get_pc());
+        printf("rom read out of range: %08x:%08x:%08x:%08x\n",addr&0x1FFFFFF,addr,len,cpu->get_pc());
         cpu->print_regs();
         exit(1);
     }
@@ -1204,13 +1204,13 @@ access_type Mem::read_external(uint32_t addr)
 
 
 template<>
-inline uint8_t Mem::read_io<uint8_t>(uint32_t addr)
+uint8_t Mem::read_io<uint8_t>(uint32_t addr)
 {
     return read_io_regs(addr);
 }
 
 template<>
-inline uint16_t Mem::read_io<uint16_t>(uint32_t addr)
+uint16_t Mem::read_io<uint16_t>(uint32_t addr)
 {
     uint16_t v = read_io_regs(addr);
     v |= read_io_regs(addr+1) << 8;
@@ -1218,12 +1218,12 @@ inline uint16_t Mem::read_io<uint16_t>(uint32_t addr)
 }
 
 template<>
-inline uint32_t Mem::read_io<uint32_t>(uint32_t addr)
+uint32_t Mem::read_io<uint32_t>(uint32_t addr)
 {
     uint32_t v = read_io_regs(addr);
-    v |= read_io_regs(addr+1)  << 8;
+    v |= read_io_regs(addr+1) << 8;
     v |= read_io_regs(addr+2) << 16;
-    v |= read_io_regs(addr+3) << 16;
+    v |= read_io_regs(addr+3) << 24;
     return v;
 }
 
@@ -1373,35 +1373,35 @@ void Mem::handle_write(std::vector<uint8_t> &buf,uint32_t addr,access_type v)
 
 // as io has side effects we need to write to it byte by byte
 template<>
-inline void Mem::write_io<uint8_t>(uint32_t addr,uint8_t v)
+void Mem::write_io<uint8_t>(uint32_t addr,uint8_t v)
 {
     mem_region = IO;
     //io[addr & 0x3ff] = v;
 
-    write_io_regs(addr,v&0xff);
+    write_io_regs(addr,v);
 }
 
 
 template<>
-inline void Mem::write_io<uint16_t>(uint32_t addr,uint16_t v)
+void Mem::write_io<uint16_t>(uint32_t addr,uint16_t v)
 {
     mem_region = IO;
     //io[addr & 0x3ff] = v;
 
-    write_io_regs(addr,v&0xff);
-    write_io_regs(addr+1,(v&0xff00) >> 8);
+    write_io_regs(addr,v&0x000000ff);
+    write_io_regs(addr+1,(v&0x0000ff00) >> 8);
 }
 
 
 template<>
-inline void Mem::write_io<uint32_t>(uint32_t addr,uint32_t v)
+void Mem::write_io<uint32_t>(uint32_t addr,uint32_t v)
 {
     mem_region = IO;
     //io[addr & 0x3ff] = v;
 
-    write_io_regs(addr,v&0xff);
-    write_io_regs(addr+1,(v&0xff00) >> 8); 
-    write_io_regs(addr+2,(v&0xff0000) >> 16);
+    write_io_regs(addr,v&0x000000ff);
+    write_io_regs(addr+1,(v&0x0000ff00) >> 8); 
+    write_io_regs(addr+2,(v&0x00ff0000) >> 16);
     write_io_regs(addr+3,(v&0xff000000) >> 24);
 }
 
